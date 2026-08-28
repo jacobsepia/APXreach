@@ -10,6 +10,7 @@ import {
 } from "@/db";
 import { money, relativeDay } from "@/lib/format";
 import { Card, Caps, LedgerDot } from "@/components/ui";
+import { TaskCheckbox } from "@/components/task-checkbox";
 
 export const dynamic = "force-dynamic";
 
@@ -223,7 +224,7 @@ export default async function DashboardPage() {
                 key={task.id}
                 className={`flex items-center gap-2.5 py-2 ${i < tasks.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
               >
-                <span className="size-4 shrink-0 rounded-[5px] border-[1.5px] border-[color-mix(in_srgb,var(--text-primary)_25%,transparent)]" />
+                <TaskCheckbox taskId={task.id} />
                 <span className="flex-1 text-[13px] text-foreground">{task.subject}</span>
                 {overdueTask(task.dueAt) ? (
                   <span className="rounded-full bg-[color-mix(in_srgb,var(--accent-hot)_10%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-[#b91c1c]">

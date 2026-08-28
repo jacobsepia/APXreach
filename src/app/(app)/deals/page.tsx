@@ -2,6 +2,8 @@ import { asc, eq, inArray, ne } from "drizzle-orm";
 import { companies, db, deals, ledgerInvoices, pipelineStages, pipelines } from "@/db";
 import { daysBetween, money, shortDate } from "@/lib/format";
 import { Avatar, Card, Pill } from "@/components/ui";
+import { QuickCreate } from "@/components/quick-create";
+import { StageSelect } from "@/components/stage-select";
 import { AlertTriangle, Check, ChevronDown, FileText, Clock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +16,7 @@ export default async function DealsPage() {
     return <p className="text-sm text-muted-foreground">No pipeline yet.</p>;
   }
 
-  const [stages, rows, openLedgerInvoices] = await Promise.all([
+  const [stages, rows, openLedgerInvoices, companyOptions] = await Promise.all([
     db
       .select()
       .from(pipelineStages)
@@ -43,7 +45,14 @@ export default async function DealsPage() {
       .select({ number: ledgerInvoices.number })
       .from(ledgerInvoices)
       .where(ne(ledgerInvoices.status, "paid")),
+    db
+      .select({ id: companies.id, name: companies.name })
+      .from(companies)
+      .orderBy(companies.name),
   ]);
+  const stageOptions = stages
+    .filter((s) => s.kind !== "lost")
+    .map((s) => ({ id: s.id, name: s.name }));
 
   const stillOpen = new Set(openLedgerInvoices.map((r) => r.number));
   const columns = stages
@@ -90,6 +99,7 @@ export default async function DealsPage() {
               Table
             </span>
           </div>
+          <QuickCreate companies={companyOptions} stages={stageOptions} only="deal" buttonLabel="New deal" />
         </div>
       </div>
 
@@ -150,12 +160,19 @@ export default async function DealsPage() {
                       )}
                     </Pill>
                   )}
-                  <div className="mt-0.5 flex items-center justify-between">
-                    <span className="text-[11px] text-[var(--text-tertiary)]">
-                      {d.status === "won"
-                        ? `Won ${shortDate(d.wonAt ?? undefined)}`
-                        : `Close ${shortDate(d.closeDate)}`}
-                    </span>
+                  <div className="mt-0.5 flex items-center justify-between gap-2">
+                    {d.status === "won" ? (
+                      <span className="text-[11px] text-[var(--text-tertiary)]">
+                        Won {shortDate(d.wonAt ?? undefined)}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <StageSelect dealId={d.id} stageId={d.stageId} stages={stageOptions} />
+                        <span className="text-[11px] text-[var(--text-tertiary)]">
+                          {shortDate(d.closeDate)}
+                        </span>
+                      </span>
+                    )}
                     {d.ownerName && <Avatar name={d.ownerName} className="size-[22px]" />}
                   </div>
                 </Card>

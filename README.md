@@ -22,14 +22,19 @@ npm run db:seed           # demo workspace (Sepia Consulting)
 npm run dev
 ```
 
-## Where things stand (Phase 0)
+## Where things stand (Phase 1)
 
-Built: app shell (rail, topbar), dashboard, contacts, companies, company
-record with timeline + books panel, deals board, tasks — read views over the
-real schema, seeded with a demo workspace. The Ledger "sync" is seeded data in
-`ledger_invoices` / company rollups, shaped exactly like the v1 API serves it.
+Built on top of the Phase 0 read views: quick-create everywhere (contact,
+company, deal, task — from the topbar's New menu and per-page buttons), task
+completion, deal stage moves from the board (won stages set `wonAt` and light
+the Ledger hand-off chip), a timeline composer on company records, and the
+**real Ledger sync**: Settings → paste a company-scoped API key from Ledger's
+Settings → API access; Reach validates it against `/api/v1/connections`, then
+Sync Now walks contacts and receivable invoices, creates/updates companies,
+mirrors open invoices, and rolls up outstanding / overdue / revenue-YTD.
+Until a key is connected, the seeded demo figures stand in.
 
 Next (per the blueprint in the HubSpot project): Better Auth + Sign in with
-APX, CRUD + quick-create, the real Ledger sync worker (API key first, OAuth2
-when Ledger's consent screen ships, webhooks when Ledger's land), then
-sequences and the workflow engine.
+APX before any real data, scheduled sync (Inngest or Vercel cron), editing and
+deleting records, then Phase 2 sales tools (email via Resend, sequences, the
+workflow engine).

@@ -146,5 +146,14 @@ export const ledgerConnections = pgTable("ledger_connections", {
   workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
   ledgerCompanyName: text("ledger_company_name").notNull(),
   status: text("status").default("connected").notNull(),
+  // The company-scoped key from Ledger's Settings → API access. Held server-side
+  // only; move to encrypted storage alongside the auth work.
+  apiKey: text("api_key"),
+  ledgerCompanyId: text("ledger_company_id"),
+  baseUrl: text("base_url").default("https://apxledger.ca").notNull(),
+  baseCurrency: text("base_currency"),
+  scopes: text("scopes"),
   lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+  lastSyncSummary: text("last_sync_summary"),
+  lastSyncError: text("last_sync_error"),
 });

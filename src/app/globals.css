@@ -1,59 +1,34 @@
+/*
+ * APX Ledger design system, carried into APX Reach — one look for the family.
+ * Plum is the chrome, lime is the data. Condensed from Ledger's globals.css;
+ * the annotated original lives in the apxledger repo.
+ */
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
-/*
- * APX Ledger theme, taken from docs/design-reference.webp.
- *
- * A light product: a warm grey canvas, flat white panels, and lime as the one
- * accent that carries the brand. The reference's data palette is lime, green,
- * yellow and orange, and it uses those colours as information rather than
- * decoration — a bar is orange because it is housing, not because orange looked
- * nice there.
- *
- * Figures are set in the body grotesque with tabular numerals, bold and tightly
- * tracked, exactly as the reference sets "$12,450". There is no monospace.
- *
- * What carries over from the dark build, because it works: flat surfaces with no
- * simulated depth, the travelling accent rail on every panel, the slow canvas
- * wash, and the reveal sequence.
- */
-
 :root {
-  /* ── Surfaces ───────────────────────────────────────────────────────── */
-  /* Paper with plum in it, not grey. The blooms sit on this, not against it. */
+  
+  
   --bg-primary: #f5f1f9;
   --bg-secondary: #ffffff;
   --bg-tertiary: #f6f7f3;
   --bg-alt: #fbfcfa;
 
-  /* ── Text ───────────────────────────────────────────────────────────── */
+  
   --text-primary: #15181c;
   --text-secondary: #646c78;
-  /*
-   * 4.5:1 on white. The label grey that looked right on a dark canvas measured
-   * 2.6:1 here, and these are 9px uppercase — the size that needs the most
-   * contrast, not the least.
-   */
+  
   --text-tertiary: #6f7885;
 
-  /* ── Accents ────────────────────────────────────────────────────────── */
-  /*
-   * Two accents doing two jobs, which is the point.
-   *
-   * Plum is the chrome: buttons, rules, focus rings, the heading gradient, the
-   * sidebar's active edge. Green is the data: chart fills, money arriving, a figure
-   * in good health. Before this they were one colour, so green meant both "brand"
-   * and "good" — which is why it read as wallpaper rather than as information.
-   * Splitting them lets green mean something again and gives the chrome a colour of
-   * its own.
-   */
+  
+  
   --accent-primary: #6b21a8;
   --accent-secondary: #581c87;
   --accent-plum-300: #c084fc;
   --accent-plum-200: #ede9fe;
-  /* The data accent — what the charts and the money figures use. */
+  
   --accent-data: #7cc00f;
   --accent-data-soft: #bef264;
   --accent-tertiary: #22c55e;
@@ -64,34 +39,21 @@
   --accent-lime-200: #d9f99d;
   --accent-yellow: #fbcf20;
   --accent-mint: #4ade80;
-  /* Kept under their old names so existing call sites resolve to the new brand. */
+  
   --accent-indigo-300: #65a30d;
   --accent-purple-300: #16a34a;
   --accent-cyan-300: #f97c1b;
   --accent-green-300: #4ade80;
 
-  /* ── The five sides of a ledger ─────────────────────────────────────── */
-  /*
-   * Every screen in this app is ultimately about one of five things, and until
-   * now none of them looked like anything: a chart of accounts drew revenue,
-   * expenses, assets, liabilities and equity in identical grey, and so did every
-   * report built from them. Giving each a colour is not decoration — it is the
-   * one fact a bookkeeper reads first, and it was the only fact not on screen.
-   *
-   * Drawn from the two accents already here rather than a new rainbow. Green is
-   * the data accent and means money arriving, so revenue takes it and assets
-   * take its lighter relative; amber is already the caution colour and money
-   * leaving is what caution is about; plum is the chrome, so the two that are
-   * claims on the business rather than its trading — liabilities and equity —
-   * take the two plums. Nothing here invents a hue the palette did not have.
-   */
+  
+  
   --ledger-revenue: var(--accent-data);
   --ledger-expense: var(--accent-warning);
   --ledger-asset: var(--accent-mint);
   --ledger-liability: var(--accent-plum-300);
   --ledger-equity: var(--accent-primary);
 
-  /* ── Flat surfaces ──────────────────────────────────────────────────── */
+  
   --surface: #ffffff;
   --surface-raised: #ffffff;
   --surface-sunken: #f7f8f4;
@@ -99,25 +61,16 @@
   --rule-soft: rgba(21, 24, 28, 0.05);
   --rule-strong: rgba(21, 24, 28, 0.15);
   --rule-accent: rgba(126, 34, 206, 0.45);
-  /* The wash used for hover and for a selected row — plum, at a whisper. */
+  
   --tint: rgba(107, 33, 168, 0.05);
   --tint-strong: rgba(107, 33, 168, 0.1);
 
-  /*
-   * On white, a panel needs a whisper of shadow to sit on the canvas at all — a
-   * hairline alone disappears. This is one pixel of contact, not elevation.
-   */
+  
   --edge-top:
     0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.05);
 
-  /* ── Gradients ──────────────────────────────────────────────────────── */
-  /*
-   * The one ramp everything animated shares — the rail across the top of every
-   * panel, the travelling ticker. Chrome, so it follows plum: plum through violet to
-   * magenta and back, warming at the centre without ever reaching orange. The old
-   * ramp ended in the warning colour, which read as an alert on a panel that was
-   * merely sitting there.
-   */
+  
+  
   --gradient-flow: linear-gradient(
     90deg,
     #7e22ce 0%,
@@ -151,18 +104,7 @@
     rgba(126, 34, 206, 0.07) 0%,
     rgba(162, 28, 175, 0.04) 100%
   );
-  /*
-   * The surface a modal sits on: a plum wash with starbursts behind it.
-   *
-   * Radial gradients rather than an image — nothing to download, nothing to go
-   * stale, and it scales to any dialog size for free. Four bursts at different
-   * radii read as depth; a single one reads as a smudge.
-   *
-   * Kept very faint on purpose. A dialog in this app is nearly always somewhere a
-   * figure is typed or approved, and a background that competes with a number is a
-   * background that gets a number wrong. The bursts are visible when looked for and
-   * invisible when working.
-   */
+  
   --gradient-dialog:
     radial-gradient(
       circle at 12% 8%,
@@ -188,47 +130,31 @@
     linear-gradient(155deg, #ffffff 0%, #fdfcff 46%, #faf7ff 100%);
 
   --gradient-page-base: linear-gradient(170deg, #faf8fc 0%, #f5f1f9 58%, #f0eaf7 100%);
-  /*
-   * The canvas: plum blooms on a plum-tinted paper.
-   *
-   * Four soft spots rather than one wash, because a single gradient reads as a
-   * gradient and four overlapping ones read as light. They drift — the two
-   * aurora layers below move them on different clocks — so the page is never
-   * quite the same twice without anything ever visibly moving.
-   *
-   * The green and citrus that used to be in here made the canvas a warm grey
-   * and the brand nothing in particular. One hue, at four strengths, is the
-   * whole idea: everything that is not a panel is plum, and everything that is
-   * a panel is white paper laid on top of it.
-   *
-   * Kept under 0.16 alpha. This sits behind an accounting application, and the
-   * moment a wash competes with a column of figures it has stopped being a
-   * background.
-   */
+  
   --gradient-mesh:
     radial-gradient(ellipse 58% 44% at 14% 2%, rgba(124, 58, 237, 0.15) 0%, transparent 70%),
     radial-gradient(ellipse 44% 32% at 86% 6%, rgba(168, 85, 247, 0.13) 0%, transparent 66%),
     radial-gradient(ellipse 54% 44% at 78% 84%, rgba(107, 33, 168, 0.14) 0%, transparent 72%),
     radial-gradient(ellipse 40% 34% at 4% 92%, rgba(147, 51, 234, 0.11) 0%, transparent 64%);
 
-  /* ── Thin geometry ───────────────────────────────────────────────────── */
+  
   --band: 3.25rem;
   --band-tall: 4.5rem;
   --row: 2.125rem;
   --topbar: 3rem;
   --ticker: 1.75rem;
 
-  /* ── Layout ─────────────────────────────────────────────────────────── */
+  
   --sidebar-collapsed: 68px;
   --sidebar-expanded: 252px;
 
-  /* ── Motion ─────────────────────────────────────────────────────────── */
+  
   --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   --transition-fast: 200ms var(--ease-smooth);
   --transition-med: 400ms var(--ease-smooth);
 
-  /* Semantic names the components already use, mapped onto the new brand. */
+  
   --background: var(--bg-primary);
   --foreground: var(--text-primary);
   --card: var(--surface);
@@ -236,7 +162,7 @@
   --popover: #ffffff;
   --popover-foreground: var(--text-primary);
   --primary: var(--accent-primary);
-  /* Lime is bright: it takes dark text, which is how the reference does it. */
+  
   --primary-foreground: #ffffff;
   --secondary: var(--bg-tertiary);
   --secondary-foreground: var(--text-primary);
@@ -250,7 +176,7 @@
   --input: rgba(21, 24, 28, 0.14);
   --ring: var(--accent-secondary);
 
-  /* Chart colours in the reference's own order: orange, yellow, lime, green. */
+  
   --chart-1: #f97c1b;
   --chart-2: #fbcf20;
   --chart-3: #7cc00f;
@@ -304,7 +230,7 @@
   --color-success: var(--accent-success);
   --color-warning: var(--accent-warning);
 
-  /* The reference is generously rounded: cards near 16px, controls near 10px. */
+  
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 10px;
@@ -322,7 +248,7 @@
     @apply border-border outline-ring/50;
   }
 
-  /* Light product: native controls, pickers and scrollbars follow. */
+  
   :root {
     color-scheme: light;
   }
@@ -337,26 +263,13 @@
     color: var(--text-tertiary);
   }
 
-  /*
-   * The paper colour and its wash live on <html>, not on <body>, and that is
-   * load-bearing rather than stylistic. The four drifting blooms below are
-   * body::before and body::after at z-index -1 — negative, so they paint behind
-   * body's own box. Give body an opaque background and it covers them exactly,
-   * leaving only the flat linear wash and none of the light. Putting the canvas
-   * on <html> instead lets the blooms sit between the paper and the content,
-   * which is the whole effect.
-   */
+  
   html {
     background-color: var(--bg-primary);
     background-image: var(--gradient-page-base);
   }
 
-  /*
-   * The canvas is a slow wash of the data palette, two layers drifting against
-   * each other on a 44-second cycle — under the threshold where motion draws the
-   * eye. Transform-animated on a fixed element, so it lands on the compositor and
-   * a 2,000-row register still scrolls at frame rate.
-   */
+  
   body {
     background-color: transparent;
     background-image: none;
@@ -436,39 +349,18 @@
     letter-spacing: -0.014em;
   }
 
-  /*
-   * Figures: the body grotesque with tabular numerals, as the reference sets
-   * them. Every money value and date in the app already carries this marker, so
-   * binding it here applies the rule everywhere without a call site remembering.
-   */
+  
   .tabular-nums {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
     letter-spacing: -0.015em;
-    /*
-     * And never broken across two lines.
-     *
-     * formatMoney writes a true minus sign, U+2212, which a browser treats as a
-     * break opportunity — so in a narrow column "−$646.49" wrapped into a lone
-     * "−" above the figure, which reads as a stray dash rather than a negative.
-     * The Profit & Loss by month is where it showed first, having a dozen
-     * columns to squeeze, but the same was latent in all 282 places this class
-     * is used and would have surfaced one narrow column at a time.
-     *
-     * Bound here for the reason the note above gives: every figure and date in
-     * the app already carries this marker, and nothing that carries it is prose
-     * — a description sits in its own cell without it, and is still free to
-     * wrap.
-     */
+    
     white-space: nowrap;
   }
 }
 
 @layer components {
-  /*
-   * A panel is a flat white plane: a hairline, generous radius, and one pixel of
-   * contact shadow so it sits on the canvas rather than floating above it.
-   */
+  
   .glass-card,
   [data-slot="card"] {
     position: relative;
@@ -481,7 +373,7 @@
     -webkit-backdrop-filter: none;
   }
 
-  /* The signature: a 1px accent rail across the top of every panel, travelling. */
+  
   .glass-card::before,
   [data-slot="card"]::before,
   .accent-rail::before {
@@ -514,7 +406,7 @@
     }
   }
 
-  /* The same ramp travelling down an edge, for the navigation rail. */
+  
   .nav-rail {
     background: var(--gradient-flow);
     background-size: 100% 300%;
@@ -526,7 +418,7 @@
     }
   }
 
-  /* Flat hover: the rule takes the accent and the surface warms. Nothing moves. */
+  
   .apx-hover {
     transition:
       border-color 220ms var(--ease-smooth),
@@ -537,26 +429,8 @@
     background-color: #fbfdf6;
   }
 
-  /*
-   * ── Bands ─────────────────────────────────────────────────────────────
-   * The layout unit: short, full width, divided by vertical rules. Six figures on
-   * one line read in a single sweep; the same six as cards are a grid to search.
-   */
-  /*
-   * A control strip: the panel treatment, at half the height.
-   *
-   * The filter bar is not a panel — it holds no content, only the controls that
-   * decide what the panel below it shows — so it takes the family resemblance
-   * and none of the weight. The hairline and the accent rail are the same; the
-   * radius is one step down from a panel's, the padding is a third of it, and
-   * the shadow lifts slightly further off the canvas so the strip reads as
-   * sitting above the page rather than being another plane of it.
-   *
-   * Deliberately no `overflow: hidden`, unlike .band and the cards. The menus
-   * inside open downwards past this element's own edge, and clipping them is
-   * what a panel's overflow rule would do. The rail is inset from the corners
-   * instead, which is what overflow was doing for the others.
-   */
+  
+  
   .control-bar {
     position: relative;
     border: 1px solid var(--rule);
@@ -636,7 +510,7 @@
     white-space: nowrap;
   }
 
-  /* ── Dense rows ───────────────────────────────────────────────────────── */
+  
   .dense th,
   .dense td {
     height: var(--row);
@@ -647,56 +521,21 @@
     border-bottom: 1px solid rgba(21, 24, 28, 0.05);
   }
 
-  /* ── Reveal ───────────────────────────────────────────────────────────── */
-  /*
-   * Visible is the resting state; the animation is the decoration.
-   *
-   * The opacity came only from the keyframe, so a panel was invisible until its
-   * animation ran — and anything that stops one running leaves the content
-   * permanently hidden with no error and nothing in the DOM to explain it. A
-   * backgrounded tab during load will do it. Declaring opacity: 1 here costs
-   * nothing while animations work, because the keyframe's `from` still fades
-   * each panel in, and means the worst case is a dashboard that appears without
-   * its entrance rather than one that never appears.
-   *
-   * The stagger is capped for the same reason: index 10 is the last panel on
-   * the dashboard, and half a second of nothing at the bottom of a long page is
-   * indistinguishable from a panel that is not there.
-   *
-   * `backwards`, not `both`. The keyframes have no `to`, so the forwards half of
-   * `both` was filling the element with a transform for the rest of the page's
-   * life — and an element with a transform in effect is a stacking context, so a
-   * menu opened inside one could not rise above anything drawn after it. That is
-   * how the dashboard's hidden-cards list ended up behind the figures below it.
-   * `backwards` still holds the `from` through the stagger delay and animates
-   * exactly the same; it just lets go at the end, which is the only difference
-   * the eye cannot see and the paint order can.
-   */
+  
+  
   .reveal {
     opacity: 1;
     animation: rise 520ms var(--ease-smooth) backwards;
     animation-delay: calc(min(var(--i, 0), 6) * 45ms);
   }
-  /*
-   * Movement only. The fade is gone on purpose.
-   *
-   * With opacity in here and fill-mode: both, a panel is invisible from the
-   * moment it is laid out until its animation actually advances — so anything
-   * that stops the clock leaves the content permanently hidden, with no error
-   * and nothing in the DOM to explain it. That is not a hypothetical: this
-   * dashboard was rendering all ten panels at opacity 0 with the animations
-   * reporting themselves as running at time zero, and the page looked empty.
-   *
-   * An 8px rise reads as an entrance on its own, and the worst case becomes a
-   * panel that appears without moving rather than one that never appears.
-   */
+  
   @keyframes rise {
     from {
       transform: translateY(8px);
     }
   }
 
-  /* ── Ticker ───────────────────────────────────────────────────────────── */
+  
   .ticker-track {
     display: flex;
     width: max-content;
@@ -711,7 +550,7 @@
     }
   }
 
-  /* ── Scroll-driven accent ─────────────────────────────────────────────── */
+  
   .scroll-progress {
     transform-origin: 0 50%;
   }
@@ -730,11 +569,7 @@
     }
   }
 
-  /*
-   * ── Chart motion ──────────────────────────────────────────────────────
-   * Charts draw themselves once, on arrival. A sparkline is normalised to
-   * pathLength 1 so one keyframe fits every shape.
-   */
+  
   .spark-draw {
     stroke-dasharray: 1;
     animation: draw 900ms var(--ease-smooth) both;
@@ -768,11 +603,7 @@
     }
   }
 
-  /*
-   * The reference fills its bars and meters with diagonal hatching rather than
-   * flat colour, which is what stops a row of six coloured bars looking like a
-   * toy. Laid over whatever colour the element already has.
-   */
+  
   .hatch {
     background-image: repeating-linear-gradient(
       -45deg,
@@ -781,7 +612,7 @@
     );
   }
 
-  /* Brand gradient fill for headline words. */
+  
   .gradient-text {
     background: var(--gradient-text);
     -webkit-background-clip: text;
@@ -799,7 +630,7 @@
     animation: flow 14s linear infinite;
   }
 
-  /* KPI pair, kept for call sites that still use it. */
+  
   .kpi-label {
     color: var(--text-tertiary);
     font-size: 10px;
@@ -825,12 +656,7 @@
     text-transform: uppercase;
   }
 
-  /*
-   * Dense tables. No header fill — small tracked grey caps over a rule, as the
-   * reference's transaction list does it. Rows take a lime tint and a left accent
-   * bar on hover, which is far easier to track across a row of figures than a
-   * background change alone.
-   */
+  
   .data-surface,
   [data-slot="card"]:has(table) {
     background: var(--surface);
@@ -856,17 +682,6 @@
   }
 }
 
-/*
- * ── Print ────────────────────────────────────────────────────────────────
- *
- * A report an accountant will accept, produced by the browser's own "Save as
- * PDF" — no headless Chrome, no PDF library, and it works for every report at
- * once because they all share the same shell.
- *
- * The screen is a workspace; the page is a document. So the chrome goes, the
- * canvas goes white, the travelling rails stop, and a table is told not to break
- * a row across two sheets.
- */
 @media print {
   @page {
     margin: 14mm 12mm;
@@ -888,8 +703,7 @@
     display: none !important;
   }
 
-  /* The workspace: navigation, the ticker, the top bar, and anything a reader of
-     a printed page cannot click. */
+  
   aside,
   header,
   .ticker-rail,
@@ -897,7 +711,7 @@
     display: none !important;
   }
 
-  /* Content was offset by the navigation rail that no longer exists. */
+  
   main,
   main > div {
     margin-left: 0 !important;
@@ -917,7 +731,7 @@
     display: none !important;
   }
 
-  /* Ink is expensive and a tint does not photocopy. */
+  
   tbody tr:hover {
     background: none !important;
     box-shadow: none !important;
@@ -928,7 +742,7 @@
     transform: none !important;
   }
 
-  /* A gradient-clipped heading prints as nothing at all. */
+  
   .gradient-text,
   .gradient-text-flow {
     background: none !important;
@@ -950,7 +764,7 @@
     text-decoration: none !important;
   }
 
-  /* Grey-on-white at 11px is legible on screen and gone on paper. */
+  
   .metric-label,
   .section-label,
   .eyebrow,
@@ -959,11 +773,6 @@
   }
 }
 
-/*
- * Everything decorative stops. The wash, the travelling rails, the reveal
- * sequence, the ticker and the chart draw-ons are all ornament; the layout does
- * not depend on any of them, so they switch off outright rather than slow down.
- */
 @media (prefers-reduced-motion: reduce) {
   body::before,
   body::after,
@@ -995,18 +804,6 @@
   }
 }
 
-/*
- * The pinned rail — deliberately outside every @layer.
- *
- * This has to beat `w-[var(--sidebar-collapsed)]`, which Tailwind emits into the
- * utilities layer. A rule inside @layer components loses to utilities however
- * specific it is, because cascade layers are decided before specificity is even
- * consulted; unlayered CSS sits above all of them. Hover only ever appeared to work
- * because :hover is a pseudo-class competing inside the same layer.
- *
- * The alternative was an inline style, which would win too and would put a layout
- * decision in the component instead of the stylesheet.
- */
 aside[data-pinned] {
   width: var(--sidebar-expanded);
 }
@@ -1015,55 +812,12 @@ aside[data-pinned] .rail-label {
   opacity: 1;
 }
 
-/*
- * Pinned reflows the page; hovering does not.
- *
- * The rail is fixed and expands over the content on hover on purpose — a pointer
- * passing across the edge of the screen should not shove a wide ledger table
- * sideways and back. Pinning is a decision rather than an accident, so it earns the
- * space: the content's left margin moves out to meet the open rail and nothing is
- * covered.
- *
- * Driven from an attribute on <html> because the layout wrapper is a server
- * component and knows nothing about a preference living in localStorage. The rail
- * sets it on itself and on the document root, which is the one place a stylesheet
- * can reach from anywhere.
- */
-/*
- * Only where a rail exists to make room for.
- *
- * The rail is `hidden md:flex`, and this rule was not scoped to match. A phone whose
- * localStorage happened to hold a pin — set on a desktop, or by the same person on a
- * tablet — got 252px of margin against an invisible rail: on a 375px screen the whole
- * app was squeezed into 123px and every page scrolled sideways, with nothing on
- * screen to explain why. A layout rule that answers a rail has to disappear with it.
- */
 @media (min-width: 48rem) {
   html[data-sidebar-pinned] .app-shell {
     margin-left: var(--sidebar-expanded);
   }
 }
 
-/*
- * The one button on the page that still has to be pressed.
- *
- * A statement uploaded and reviewed but not imported is a job half done, and the
- * screen looks finished either way: the transactions are listed, the balance check
- * has run, it all reads as complete. People close the tab believing the import
- * happened. So the button that would finish it carries the brand ramp travelling
- * across it and a glow that breathes, and it is the only thing on the screen doing
- * either.
- *
- * Used sparingly on purpose. A page where two things clamour has nothing urgent on
- * it; this earns its motion by being alone.
- *
- * Outside every @layer, deliberately. Layers resolve before specificity, so a rule
- * written inside `@layer components` loses to the button's own utility background
- * however specific it is — the animation and the background-size applied while the
- * gradient silently did not, which is the worst kind of half-working. This is the
- * second time that trap has been hit in this stylesheet; the pinned sidebar rail
- * below is the first.
- */
 .cta-urgent {
   background-image: var(--gradient-flow);
   background-size: 300% 100%;
@@ -1073,16 +827,13 @@ aside[data-pinned] .rail-label {
   border-color: transparent;
 }
 .cta-urgent:hover {
-  /* Steady on hover: it has been found, so it stops asking. */
+  
   animation: flow 6s linear infinite;
   box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.28);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /*
-   * Motion off means motion off, but the point was never the movement — it was
-   * being unmissable, and a static ring still is.
-   */
+  
   .cta-urgent {
     animation: none !important;
     background-position: 50% 0;
@@ -1090,20 +841,6 @@ aside[data-pinned] .rail-label {
   }
 }
 
-/* ── Marketing motion ─────────────────────────────────────────────────
- *
- * The public pages need a different register from the application. Inside the
- * product, motion is a cost: somebody is reading figures and anything that moves
- * is competing with the number they are trying to read. On the front page the
- * opposite is true — a still page reads as a dead product, and the thing being
- * demonstrated is that this software is watching something for you.
- *
- * So these are continuous rather than one-shot. Everything is transform and
- * opacity or background-position, which the compositor handles without laying
- * the page out again, and all of it stops dead under prefers-reduced-motion.
- */
-
-/* A gradient that travels through itself, rather than a static one. */
 .gradient-animated {
   background-image: linear-gradient(
     110deg,
@@ -1144,7 +881,6 @@ aside[data-pinned] .rail-label {
   }
 }
 
-/* A slow conic sweep, for the light behind glass. */
 .conic-sweep {
   background-image: conic-gradient(
     from 0deg,
@@ -1163,7 +899,6 @@ aside[data-pinned] .rail-label {
   }
 }
 
-/* Blobs that drift independently, so the light never repeats exactly. */
 .blob {
   position: absolute;
   border-radius: 50%;
@@ -1205,7 +940,6 @@ aside[data-pinned] .rail-label {
   }
 }
 
-/* Cards that breathe at different phases, so a stack never moves as one. */
 .bob-1 {
   animation: bob 7.5s var(--ease-smooth) infinite alternate;
 }
@@ -1225,7 +959,6 @@ aside[data-pinned] .rail-label {
   }
 }
 
-/* A light passing across glass. */
 .sheen::after {
   content: "";
   position: absolute;
@@ -1252,7 +985,6 @@ aside[data-pinned] .rail-label {
   }
 }
 
-/* A line that draws itself, over and over. */
 .trace {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
@@ -1269,7 +1001,6 @@ aside[data-pinned] .rail-label {
   }
 }
 
-/* A ring that leaves, the way a notification does. */
 .ping::before {
   content: "";
   position: absolute;
@@ -1291,21 +1022,6 @@ aside[data-pinned] .rail-label {
   }
 }
 
-/*
- * The company switcher's ring.
- *
- * A one-pixel gradient border, drawn by putting the gradient on the element and
- * letting an opaque child cover all but the edge — which keeps it a real border
- * at any radius, unlike a box-shadow, and needs no pseudo-element that would
- * fight the dropdown's positioning.
- *
- * It moves, because a still control in a still bar is a caption. It moves
- * *slowly* — a 9-second pass, and colours that stay close in value — because
- * this sits in front of a bookkeeper all day: anything faster stops being
- * noticeable within a week and starts being irritating within an hour. Hover
- * brightens rather than accelerates, so the response is to the person rather
- * than to the clock.
- */
 .switcher-ring {
   background-image: linear-gradient(
     115deg,
@@ -1324,13 +1040,6 @@ aside[data-pinned] .rail-label {
   opacity: 1;
 }
 
-/*
- * A slow wash of brand light behind a whole section.
- *
- * Three radial gradients that drift independently, at strengths low enough that
- * body text on top never drops below its contrast. It exists so the long white
- * middle of the page has something happening in it other than words.
- */
 .aurora {
   background-image:
     radial-gradient(60% 70% at 18% 30%, rgba(192, 38, 211, 0.16), transparent 70%),
@@ -1355,12 +1064,6 @@ aside[data-pinned] .rail-label {
   }
 }
 
-/*
- * A hairline of moving colour along a card's top edge, lit on hover.
- *
- * Cheaper than a gradient border — one absolutely positioned pixel row, so the
- * card keeps its ordinary border and nothing reflows when it lights up.
- */
 .edge-lit::before {
   content: "";
   position: absolute;
@@ -1386,11 +1089,7 @@ aside[data-pinned] .rail-label {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /*
-   * Everything above becomes still. The composition was designed to read as a
-   * picture even when nothing is moving, so this is the same page rather than a
-   * stripped one.
-   */
+  
   .aurora,
   .edge-lit::before,
   .switcher-ring,

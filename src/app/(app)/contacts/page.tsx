@@ -3,6 +3,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { companies, contacts, db } from "@/db";
 import { money, relativeDay } from "@/lib/format";
 import { Avatar, Card, LedgerDot, Pill, StagePill } from "@/components/ui";
+import { QuickCreate } from "@/components/quick-create";
 import { Download } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Contacts" };
 
 export default async function ContactsPage() {
-  const [rows, stageCounts, overdueAccounts] = await Promise.all([
+  const [rows, stageCounts, overdueAccounts, companyOptions] = await Promise.all([
     db
       .select({
         id: contacts.id,
@@ -36,6 +37,10 @@ export default async function ContactsPage() {
       .select({ count: sql<number>`count(*)` })
       .from(companies)
       .where(sql`${companies.overdueCents} > 0`),
+    db
+      .select({ id: companies.id, name: companies.name })
+      .from(companies)
+      .orderBy(companies.name),
   ]);
 
   const countOf = (stage: string) =>
@@ -58,10 +63,13 @@ export default async function ContactsPage() {
             {total} people · {customerCount} belong to paying customers in APX Ledger
           </p>
         </div>
-        <button className={chip.replace("text-muted-foreground", "text-foreground")}>
-          <Download className="size-3.5" />
-          <span>Import CSV</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button className={chip.replace("text-muted-foreground", "text-foreground")}>
+            <Download className="size-3.5" />
+            <span>Import CSV</span>
+          </button>
+          <QuickCreate companies={companyOptions} stages={[]} only="contact" buttonLabel="Add contact" />
+        </div>
       </div>
 
       <div className="flex items-center gap-2">

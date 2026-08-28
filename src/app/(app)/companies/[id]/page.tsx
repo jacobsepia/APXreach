@@ -12,6 +12,7 @@ import {
 } from "@/db";
 import { daysBetween, money, monthYear, shortDate } from "@/lib/format";
 import { Avatar, Card, Caps, LedgerDot, Pill } from "@/components/ui";
+import { TimelineComposer } from "@/components/timeline-composer";
 import {
   AlertTriangle,
   Banknote,
@@ -237,7 +238,8 @@ export default async function CompanyPage({
 
         {/* Timeline */}
         <Card className="p-5">
-          <div className="font-display text-[15px] font-semibold text-foreground">Timeline</div>
+          <div className="mb-3 font-display text-[15px] font-semibold text-foreground">Timeline</div>
+          <TimelineComposer companyId={company.id} />
           <div className="mt-3 flex flex-col">
             {timeline.map((item, i) => (
               <div
