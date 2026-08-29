@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { auth } from "@/lib/auth";
 import {
   activities,
   companies,
@@ -23,9 +25,17 @@ import { connectToLedger, runLedgerSync } from "@/lib/ledger";
  */
 
 async function workspaceId(): Promise<string> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) throw new Error("Not signed in.");
   const [ws] = await db.select({ id: workspaces.id }).from(workspaces).limit(1);
   if (!ws) throw new Error("No workspace yet — run the seed or create one.");
   return ws.id;
+}
+
+/** The signed-in person's name, for timeline attribution. */
+async function actorName(): Promise<string> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  return session?.user.name ?? "Reach";
 }
 
 const trimmed = z.string().trim();
@@ -117,7 +127,7 @@ export async function createTask(formData: FormData): Promise<void> {
     subject,
     companyId: companyId || null,
     dueAt: dueRaw ? new Date(dueRaw) : null,
-    actorName: optionalText.parse(formData.get("ownerName") ?? "") ?? "Jacob S.",
+    actorName: optionalText.parse(formData.get("ownerName") ?? "") ?? (await actorName()),
   });
   revalidatePath("/tasks");
   revalidatePath("/dashboard");
@@ -146,7 +156,7 @@ export async function logActivity(formData: FormData): Promise<void> {
     subject: labels[type],
     body,
     companyId,
-    actorName: "Jacob S.",
+    actorName: await actorName(),
     occurredAt: new Date(),
   });
   await db

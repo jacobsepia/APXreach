@@ -1,4 +1,6 @@
 import { ChevronDown, Search } from "lucide-react";
+import { initials } from "@/lib/format";
+import { SignOutButton } from "@/components/sign-out";
 
 /*
  * The shell's top strip. Quick-create rides in from the layout as a client
@@ -6,9 +8,11 @@ import { ChevronDown, Search } from "lucide-react";
  */
 export function Topbar({
   workspaceName,
+  userName,
   quickCreate,
 }: {
   workspaceName: string;
+  userName: string;
   quickCreate?: React.ReactNode;
 }) {
   return (
@@ -23,9 +27,13 @@ export function Topbar({
           <span>Search people, companies, deals</span>
         </div>
         {quickCreate}
-        <div className="flex size-8 items-center justify-center rounded-full bg-[var(--accent-plum-200)] text-xs font-semibold text-[var(--accent-primary)]">
-          JS
+        <div
+          title={userName}
+          className="flex size-8 items-center justify-center rounded-full bg-[var(--accent-plum-200)] text-xs font-semibold text-[var(--accent-primary)]"
+        >
+          {initials(userName)}
         </div>
+        <SignOutButton />
       </div>
     </div>
   );

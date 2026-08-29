@@ -1,4 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { and, asc, eq, gte, isNull, lt, ne, sql } from "drizzle-orm";
+import { auth } from "@/lib/auth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Topbar } from "@/components/topbar";
 import { QuickCreate } from "@/components/quick-create";
@@ -30,6 +33,10 @@ function syncedLabel(at: Date | null): string | null {
 export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  /* The proxy checked for a cookie; this is the real check. */
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/sign-in");
+
   const [workspace] = await db.select().from(workspaces).limit(1);
 
   if (!workspace) {
@@ -166,6 +173,7 @@ export default async function AppLayout({
         <Ticker items={ticker} />
         <Topbar
           workspaceName={workspace.name}
+          userName={session.user.name}
           quickCreate={<QuickCreate companies={companyOptions} stages={stageOptions} />}
         />
         <main className="flex-1 px-8 py-7">{children}</main>

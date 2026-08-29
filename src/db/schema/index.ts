@@ -7,6 +7,8 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+export * from "./auth";
+
 /*
  * APX Reach — CRM core schema, Phase 0/1.
  *
