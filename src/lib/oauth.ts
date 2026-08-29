@@ -136,85 +136,128 @@ function readTokens(body: Record<string, unknown>): OAuthTokens | null {
   };
 }
 
+/*
+ * Which method proves the client. Ledger accepts either, but reads the Basic
+ * header EXCLUSIVELY when one is present — it never falls through to the body
+ * — so if that header does not survive the trip, body credentials are the only
+ * way the request can authenticate at all. Basic goes first because it is what
+ * every OAuth library sends; `post` is the retry, not a second opinion, and
+ * the two are never combined (RFC 6749 §2.3 allows exactly one per request).
+ *
+ * The retry is safe on an authorization_code grant: Ledger authenticates the
+ * client BEFORE it spends the code, so a refusal here leaves the code unused.
+ */
+type ClientAuthMethod = "basic" | "post";
+
+type TokenAttempt =
+  | { ok: true; value: OAuthTokens }
+  /** `clientRejected` marks the one refusal the other method could fix. */
+  | { ok: false; error: string; clientRejected: boolean };
+
+async function attemptToken(
+  provider: AccountingProvider,
+  credentials: ClientCredentials,
+  form: Record<string, string>,
+  method: ClientAuthMethod,
+): Promise<TokenAttempt> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/x-www-form-urlencoded",
+    Accept: "application/json",
+  };
+  const body = { ...form };
+  if (method === "basic") {
+    headers.Authorization = basicHeader(credentials);
+  } else {
+    body.client_id = credentials.clientId;
+    body.client_secret = credentials.clientSecret;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(provider.oauth!.tokenUrl, {
+      method: "POST",
+      headers,
+      body: new URLSearchParams(body).toString(),
+      cache: "no-store",
+    });
+  } catch {
+    return { ok: false, error: `Could not reach ${provider.label}.`, clientRejected: false };
+  }
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = (await response.json()) as Record<string, unknown>;
+  } catch {
+    return {
+      ok: false,
+      error: `${provider.label} returned an unreadable token response.`,
+      clientRejected: false,
+    };
+  }
+
+  if (!response.ok) {
+    const code = typeof parsed.error === "string" ? parsed.error : null;
+    const description =
+      typeof parsed.error_description === "string"
+        ? parsed.error_description
+        : (code ?? `HTTP ${response.status}`);
+    console.error(
+      `[oauth] ${provider.id} ${form.grant_type} refused (${method} auth): HTTP ${response.status} ${code ?? "no code"} — ${description}`,
+    );
+    return {
+      ok: false,
+      error: description,
+      clientRejected: code === "invalid_client" || response.status === 401,
+    };
+  }
+
+  const tokens = readTokens(parsed);
+  if (!tokens) {
+    return {
+      ok: false,
+      error: `${provider.label} returned a token response without a token.`,
+      clientRejected: false,
+    };
+  }
+  console.info(`[oauth] ${provider.id} ${form.grant_type} accepted (${method} auth).`);
+  return { ok: true, value: tokens };
+}
+
 /** Both grants answer the same way, so both parse the same way. */
 async function postToken(
   provider: AccountingProvider,
   credentials: ClientCredentials,
   form: Record<string, string>,
 ): Promise<ProviderResult<OAuthTokens>> {
-  let response: Response;
-  try {
-    response = await fetch(provider.oauth!.tokenUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Authorization: basicHeader(credentials),
-        Accept: "application/json",
-      },
-      body: new URLSearchParams(form).toString(),
-      cache: "no-store",
-    });
-  } catch {
-    return { ok: false, error: `Could not reach ${provider.label}.` };
-  }
+  const basic = await attemptToken(provider, credentials, form, "basic");
+  if (basic.ok) return { ok: true, value: basic.value };
+  if (!basic.clientRejected) return { ok: false, error: basic.error };
 
-  let body: Record<string, unknown>;
-  try {
-    body = (await response.json()) as Record<string, unknown>;
-  } catch {
-    return { ok: false, error: `${provider.label} returned an unreadable token response.` };
-  }
+  const post = await attemptToken(provider, credentials, form, "post");
+  if (post.ok) return { ok: true, value: post.value };
+  if (!post.clientRejected) return { ok: false, error: post.error };
 
-  if (!response.ok) {
-    const code = typeof body.error === "string" ? body.error : null;
-    const description =
-      typeof body.error_description === "string"
-        ? body.error_description
-        : (code ?? `HTTP ${response.status}`);
-    /* The refusal is the only record of why a connection failed, and it is
-       gone by the time anyone asks. Codes only — never the credentials. */
-    console.error(
-      `[oauth] ${provider.id} ${form.grant_type} refused: HTTP ${response.status} ${code ?? "no code"} — ${description}`,
-    );
-    /*
-     * invalid_client means the provider did not recognise REACH — not the
-     * person, not the code. Nothing in the app can fix that, so name the two
-     * env vars rather than repeating the provider's bare sentence to someone
-     * who has no way to connect it to a deployment setting.
-     */
-    if (code === "invalid_client" || response.status === 401) {
-      /*
-       * Which half of the pair is wrong is invisible from out here, and the
-       * secret itself must never be logged — but its sha256 prefix is safe to
-       * write down and is exactly what the provider stores, so it can be read
-       * off these logs and compared against their record directly. Without it
-       * this failure is indistinguishable from every other way a deployment
-       * can hold the wrong value.
-       */
-      const fingerprint = createHash("sha256")
-        .update(credentials.clientSecret, "utf8")
-        .digest("hex")
-        .slice(0, 10);
-      console.error(
-        `[oauth] ${provider.id} rejected the client — client_id=${credentials.clientId} secret_length=${credentials.clientSecret.length} secret_sha256=${fingerprint}`,
-      );
-      return {
-        ok: false,
-        error:
-          `${provider.label} did not recognise Reach's client credentials. Check that ` +
-          `${provider.oauth!.clientIdEnv} and ${provider.oauth!.clientSecretEnv} on this ` +
-          `deployment are the pair ${provider.label} last issued — re-registering the ` +
-          `client rotates the secret, and the old one keeps failing exactly like this.`,
-      };
-    }
-    return { ok: false, error: description };
-  }
-
-  const tokens = readTokens(body);
-  if (!tokens) {
-    return { ok: false, error: `${provider.label} returned a token response without a token.` };
-  }
-  return { ok: true, value: tokens };
+  /*
+   * Both methods refused the client, so the pair itself is wrong. The secret
+   * must never be logged, but its sha256 prefix is safe and is exactly what
+   * the provider stores — read it off these logs and compare against their
+   * record rather than guessing which half is stale.
+   */
+  const fingerprint = createHash("sha256")
+    .update(credentials.clientSecret, "utf8")
+    .digest("hex")
+    .slice(0, 10);
+  console.error(
+    `[oauth] ${provider.id} rejected the client on both auth methods — client_id=${credentials.clientId} secret_length=${credentials.clientSecret.length} secret_sha256=${fingerprint}`,
+  );
+  return {
+    ok: false,
+    error:
+      `${provider.label} did not recognise Reach's client credentials. Check that ` +
+      `${provider.oauth!.clientIdEnv} and ${provider.oauth!.clientSecretEnv} on this ` +
+      `deployment are the pair ${provider.label} last issued — re-registering the ` +
+      `client rotates the secret, and the old one keeps failing exactly like this.`,
+  };
 }
 
 export async function exchangeCode(params: {
