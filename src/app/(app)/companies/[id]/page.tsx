@@ -4,10 +4,11 @@ import { and, desc, eq, ne } from "drizzle-orm";
 import {
   activities,
   companies,
+  connections,
   contacts,
   db,
   deals,
-  ledgerInvoices,
+  syncedInvoices,
   pipelineStages,
 } from "@/db";
 import { daysBetween, money, monthYear, shortDate } from "@/lib/format";
@@ -76,7 +77,7 @@ export default async function CompanyPage({
   const [company] = await db.select().from(companies).where(eq(companies.id, id));
   if (!company) notFound();
 
-  const [people, openDeals, timeline, invoices] = await Promise.all([
+  const [people, openDeals, timeline, invoices, [connection]] = await Promise.all([
     db.select().from(contacts).where(eq(contacts.companyId, id)),
     db
       .select({
@@ -97,12 +98,19 @@ export default async function CompanyPage({
       .limit(8),
     db
       .select()
-      .from(ledgerInvoices)
-      .where(and(eq(ledgerInvoices.companyId, id), ne(ledgerInvoices.status, "paid")))
-      .orderBy(desc(ledgerInvoices.issuedDate)),
+      .from(syncedInvoices)
+      .where(and(eq(syncedInvoices.companyId, id), ne(syncedInvoices.status, "paid")))
+      .orderBy(desc(syncedInvoices.issuedDate)),
+    db
+      .select()
+      .from(connections)
+      .where(eq(connections.workspaceId, company.workspaceId))
+      .limit(1),
   ]);
 
   const synced = company.lifecycleStage === "customer";
+  const bookLabel = connection?.providerLabel ?? "the books";
+  const bookUrl = connection?.provider === "apxledger" ? "https://apxledger.ca" : null;
   const holdMarketing = company.overdueCents > 0 && openDeals.length > 0;
 
   return (
@@ -136,7 +144,7 @@ export default async function CompanyPage({
               {synced && (
                 <Pill kind="ledger">
                   <LedgerDot />
-                  <span>Synced with APX Ledger</span>
+                  <span>Synced with {bookLabel}</span>
                 </Pill>
               )}
             </div>
@@ -253,7 +261,7 @@ export default async function CompanyPage({
                     {item.body ? ` — ${item.body}` : ""}
                   </div>
                   <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">
-                    {item.source === "ledger" ? "APX Ledger" : (item.actorName ?? "Reach")} ·{" "}
+                    {item.source === "ledger" ? bookLabel : (item.actorName ?? "Reach")} ·{" "}
                     {stamp.format(item.occurredAt)}
                   </div>
                 </div>
@@ -275,12 +283,14 @@ export default async function CompanyPage({
                 <span>The books</span>
                 <LedgerDot />
               </Caps>
-              <a
-                href="https://apxledger.ca"
-                className="text-xs font-medium text-[var(--accent-primary)]"
-              >
-                Open in APX Ledger
-              </a>
+              {bookUrl && (
+                <a
+                  href={bookUrl}
+                  className="text-xs font-medium text-[var(--accent-primary)]"
+                >
+                  Open in {bookLabel}
+                </a>
+              )}
             </div>
             {synced ? (
               <div className="mt-3 grid grid-cols-2 gap-3">

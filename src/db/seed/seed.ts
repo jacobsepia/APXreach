@@ -29,13 +29,13 @@ const $ = (dollars: number) => Math.round(dollars * 100);
 async function main() {
   // Wipe children before parents so the script can re-run.
   await db.delete(schema.activities);
-  await db.delete(schema.ledgerInvoices);
+  await db.delete(schema.syncedInvoices);
   await db.delete(schema.deals);
   await db.delete(schema.pipelineStages);
   await db.delete(schema.pipelines);
   await db.delete(schema.contacts);
   await db.delete(schema.companies);
-  await db.delete(schema.ledgerConnections);
+  await db.delete(schema.connections);
   await db.delete(schema.workspaces);
 
   const [ws] = await db
@@ -44,9 +44,11 @@ async function main() {
     .returning();
   const wsId = ws.id;
 
-  await db.insert(schema.ledgerConnections).values({
+  await db.insert(schema.connections).values({
     workspaceId: wsId,
-    ledgerCompanyName: "Sepia Consulting",
+    provider: "apxledger",
+    providerLabel: "APX Ledger",
+    companyName: "Sepia Consulting",
     status: "connected",
     lastSyncAt: daysAgo(0, 6, 12),
   });
@@ -252,7 +254,7 @@ async function main() {
     .returning();
   const dl = Object.fromEntries(dealRows.map((d) => [d.name, d.id]));
 
-  await db.insert(schema.ledgerInvoices).values([
+  await db.insert(schema.syncedInvoices).values([
     { workspaceId: wsId, companyId: co["Maple Grove Dental"], number: "INV-1058", issuedDate: dateStr(-57), dueDate: dateStr(-32), totalCents: $(3200), outstandingCents: $(3200), status: "overdue" },
     { workspaceId: wsId, companyId: co["Maple Grove Dental"], number: "INV-1063", issuedDate: dateStr(-13), dueDate: dateStr(9), totalCents: $(5250), outstandingCents: $(5250), status: "open" },
     { workspaceId: wsId, companyId: co["Northshore Outfitters"], number: "INV-1071", issuedDate: dateStr(-7), dueDate: dateStr(23), totalCents: $(18200), outstandingCents: $(18200), status: "open" },

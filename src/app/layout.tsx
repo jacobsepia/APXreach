@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     template: "%s — APX Reach",
   },
   description:
-    "Contacts, deals and follow-up for small business — connected to APX Ledger, so your CRM and your books agree.",
+    "Contacts, deals and follow-up for small business — connected to your accounting — APX Ledger first — so your CRM and your books agree.",
   applicationName: "APX Reach",
   robots: { index: false, follow: false },
 };

@@ -12,8 +12,8 @@ import {
   companies,
   db,
   deals,
-  ledgerConnections,
-  ledgerInvoices,
+  connections,
+  syncedInvoices,
   pipelineStages,
   workspaces,
 } from "@/db";
@@ -61,8 +61,8 @@ export default async function AppLayout({
   ] = await Promise.all([
     db
       .select()
-      .from(ledgerConnections)
-      .where(eq(ledgerConnections.workspaceId, workspace.id))
+      .from(connections)
+      .where(eq(connections.workspaceId, workspace.id))
       .limit(1)
       .then((rows) => rows[0]),
     db
@@ -86,14 +86,14 @@ export default async function AppLayout({
       .where(and(eq(deals.status, "won"), gte(deals.wonAt, monthStart)))
       .then((r) => r[0]),
     db
-      .select({ total: sql<number>`coalesce(sum(${ledgerInvoices.outstandingCents}), 0)` })
-      .from(ledgerInvoices)
-      .where(ne(ledgerInvoices.status, "paid"))
+      .select({ total: sql<number>`coalesce(sum(${syncedInvoices.outstandingCents}), 0)` })
+      .from(syncedInvoices)
+      .where(ne(syncedInvoices.status, "paid"))
       .then((r) => r[0]),
     db
-      .select({ total: sql<number>`coalesce(sum(${ledgerInvoices.outstandingCents}), 0)`, count: sql<number>`count(*)` })
-      .from(ledgerInvoices)
-      .where(eq(ledgerInvoices.status, "overdue"))
+      .select({ total: sql<number>`coalesce(sum(${syncedInvoices.outstandingCents}), 0)`, count: sql<number>`count(*)` })
+      .from(syncedInvoices)
+      .where(eq(syncedInvoices.status, "overdue"))
       .then((r) => r[0]),
     db
       .select({ count: sql<number>`count(*)` })
@@ -108,6 +108,7 @@ export default async function AppLayout({
   ]);
 
   const connected = connection?.status === "connected";
+  const booksLabel = connected ? connection.providerLabel : "the books";
   const overdueCount = Number(overdueRow?.count ?? 0);
   const quietCount = Number(quietRow?.count ?? 0);
 
@@ -119,7 +120,7 @@ export default async function AppLayout({
     ...(overdueCount > 0
       ? [
           {
-            label: "Overdue in Ledger",
+            label: `Overdue in ${booksLabel}`,
             value: `${money(Number(overdueRow?.total ?? 0))} · ${overdueCount}`,
             href: "/companies",
             tone: "alert" as const,
@@ -166,7 +167,7 @@ export default async function AppLayout({
   return (
     <div className="flex min-h-screen w-full">
       <AppSidebar
-        connectionLabel={connected ? "APX Ledger connected" : null}
+        connectionLabel={connected ? `${connection.providerLabel} connected` : null}
         syncedLabel={connected ? syncedLabel(connection?.lastSyncAt ?? null) : null}
       />
       <div className="flex min-w-0 flex-1 flex-col">

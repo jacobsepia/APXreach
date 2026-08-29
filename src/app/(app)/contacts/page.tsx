@@ -60,7 +60,7 @@ export default async function ContactsPage() {
             <span className="gradient-text-flow">Contacts</span>
           </h1>
           <p className="mt-0.5 text-[13px] text-muted-foreground">
-            {total} people · {customerCount} belong to paying customers in APX Ledger
+            {total} people · {customerCount} belong to paying customers in the books
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -146,7 +146,7 @@ export default async function ContactsPage() {
         ))}
         <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-[var(--text-tertiary)]">
           <span>
-            Showing all {total} · <Pill kind="ledger">Owing comes from APX Ledger</Pill>
+            Showing all {total} · <Pill kind="ledger">Owing comes from the books</Pill>
           </span>
         </div>
       </Card>

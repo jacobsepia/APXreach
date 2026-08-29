@@ -12,11 +12,12 @@ import {
   contacts,
   db,
   deals,
-  ledgerConnections,
+  connections,
   pipelineStages,
   workspaces,
 } from "@/db";
-import { connectToLedger, runLedgerSync } from "@/lib/ledger";
+import { connectBooks, runSync } from "@/lib/sync";
+import { getProvider, type ProviderId } from "@/lib/providers";
 
 /*
  * Phase 1 mutations, as server actions. One workspace for now — the actions
@@ -187,10 +188,17 @@ export async function setDealStage(formData: FormData): Promise<void> {
   revalidatePath("/dashboard");
 }
 
-export async function connectLedger(formData: FormData): Promise<void> {
+export async function connectBooksAction(formData: FormData): Promise<void> {
   const wsId = await workspaceId();
-  const apiKey = trimmed.min(1, "Paste the API key.").parse(formData.get("apiKey"));
-  const result = await connectToLedger(wsId, apiKey);
+  const providerId = trimmed.min(1, "Pick a provider.").parse(formData.get("provider"));
+  const provider = getProvider(providerId as ProviderId);
+  if (!provider) {
+    redirect(`/settings?error=${encodeURIComponent("That provider isn't available yet.")}`);
+  }
+  const credentials = trimmed
+    .min(1, "Paste the API key.")
+    .parse(formData.get("credentials"));
+  const result = await connectBooks(wsId, provider.id, credentials);
   revalidatePath("/settings");
   if (!result.ok) {
     redirect(`/settings?error=${encodeURIComponent(result.error)}`);
@@ -198,20 +206,20 @@ export async function connectLedger(formData: FormData): Promise<void> {
   redirect("/settings");
 }
 
-export async function syncLedgerNow(): Promise<void> {
+export async function syncNow(): Promise<void> {
   const wsId = await workspaceId();
-  await runLedgerSync(wsId);
+  await runSync(wsId);
   revalidatePath("/settings");
   revalidatePath("/dashboard");
   revalidatePath("/companies");
   revalidatePath("/contacts");
 }
 
-export async function disconnectLedger(): Promise<void> {
+export async function disconnectBooks(): Promise<void> {
   const wsId = await workspaceId();
   await db
-    .update(ledgerConnections)
-    .set({ status: "disconnected", apiKey: null })
-    .where(eq(ledgerConnections.workspaceId, wsId));
+    .update(connections)
+    .set({ status: "disconnected", credentials: null })
+    .where(eq(connections.workspaceId, wsId));
   revalidatePath("/settings");
 }

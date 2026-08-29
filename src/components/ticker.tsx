@@ -16,7 +16,7 @@ export interface TickerItem {
   href: string;
   /** ok = green, warn = amber, alert = red, plain = default. */
   tone?: "ok" | "warn" | "alert" | "plain";
-  /** True for figures that come from APX Ledger — they carry the lime dot. */
+  /** True for figures that come from the connected books — they carry the lime dot. */
   ledger?: boolean;
 }
 

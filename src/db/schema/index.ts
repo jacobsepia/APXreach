@@ -40,8 +40,9 @@ export const companies = pgTable("companies", {
   ownerName: text("owner_name"),
   source: text("source"),
   customerSince: date("customer_since"),
-  // Rollups synced from APX Ledger. Read-only in Reach; lime in the UI.
-  ledgerContactId: text("ledger_contact_id"),
+  // Rollups synced from the connected books provider. Read-only in Reach;
+  // lime in the UI. externalContactId is the contact's id inside that provider.
+  externalContactId: text("external_contact_id"),
   arBalanceCents: integer("ar_balance_cents").default(0).notNull(),
   overdueCents: integer("overdue_cents").default(0).notNull(),
   avgDaysToPay: integer("avg_days_to_pay"),
@@ -61,7 +62,7 @@ export const contacts = pgTable("contacts", {
   title: text("title"),
   lifecycleStage: text("lifecycle_stage").default("lead").notNull(),
   ownerName: text("owner_name"),
-  ledgerContactId: text("ledger_contact_id"),
+  externalContactId: text("external_contact_id"),
   lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -127,10 +128,11 @@ export const activities = pgTable("activities", {
 });
 
 /*
- * A local mirror of open Ledger invoices, written by the sync. Enough for the
- * books panel and the attention list; the full document always lives in Ledger.
+ * A local mirror of the open receivables from whichever books provider is
+ * connected, written by the sync. Enough for the books panels and the
+ * attention list; the full document always lives in the provider.
  */
-export const ledgerInvoices = pgTable("ledger_invoices", {
+export const syncedInvoices = pgTable("synced_invoices", {
   id: uuid("id").defaultRandom().primaryKey(),
   workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
   companyId: uuid("company_id").references(() => companies.id).notNull(),
@@ -143,18 +145,24 @@ export const ledgerInvoices = pgTable("ledger_invoices", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const ledgerConnections = pgTable("ledger_connections", {
+/*
+ * A books connection — provider-shaped, the way Collect holds its Xero and
+ * QuickBooks connections. APX Ledger is provider #1; the provider column is
+ * what keeps Reach from ever being hard-wired to one system.
+ */
+export const connections = pgTable("connections", {
   id: uuid("id").defaultRandom().primaryKey(),
   workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
-  ledgerCompanyName: text("ledger_company_name").notNull(),
-  status: text("status").default("connected").notNull(),
-  // The company-scoped key from Ledger's Settings → API access. Held server-side
-  // only; move to encrypted storage alongside the auth work.
-  apiKey: text("api_key"),
-  ledgerCompanyId: text("ledger_company_id"),
-  baseUrl: text("base_url").default("https://apxledger.ca").notNull(),
+  provider: text("provider").notNull(), // apxledger | xero | quickbooks | …
+  providerLabel: text("provider_label").notNull(),
+  companyName: text("company_name").notNull(),
+  externalCompanyId: text("external_company_id"),
+  // The provider credential (API key today, OAuth tokens later). Held
+  // server-side only; move to encrypted storage alongside the auth hardening.
+  credentials: text("credentials"),
   baseCurrency: text("base_currency"),
   scopes: text("scopes"),
+  status: text("status").default("connected").notNull(),
   lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
   lastSyncSummary: text("last_sync_summary"),
   lastSyncError: text("last_sync_error"),

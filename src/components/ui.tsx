@@ -111,11 +111,11 @@ export function Avatar({
   );
 }
 
-/* Lime dot — the mark that a figure comes from APX Ledger, not from the CRM. */
+/* Lime dot — the mark that a figure comes from the connected books, not the CRM. */
 export function LedgerDot({ className }: { className?: string }) {
   return (
     <span
-      title="From APX Ledger"
+      title="From the books"
       className={cn("inline-block size-1.5 rounded-full bg-[var(--accent-data)]", className)}
     />
   );

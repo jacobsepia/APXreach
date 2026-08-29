@@ -1,5 +1,5 @@
 import { asc, eq, inArray, ne } from "drizzle-orm";
-import { companies, db, deals, ledgerInvoices, pipelineStages, pipelines } from "@/db";
+import { companies, db, deals, syncedInvoices, pipelineStages, pipelines } from "@/db";
 import { daysBetween, money, shortDate } from "@/lib/format";
 import { Avatar, Card, Pill } from "@/components/ui";
 import { QuickCreate } from "@/components/quick-create";
@@ -42,9 +42,9 @@ export default async function DealsPage() {
       .where(inArray(deals.status, ["open", "won"]))
       .orderBy(asc(deals.closeDate)),
     db
-      .select({ number: ledgerInvoices.number })
-      .from(ledgerInvoices)
-      .where(ne(ledgerInvoices.status, "paid")),
+      .select({ number: syncedInvoices.number })
+      .from(syncedInvoices)
+      .where(ne(syncedInvoices.status, "paid")),
     db
       .select({ id: companies.id, name: companies.name })
       .from(companies)
@@ -142,7 +142,7 @@ export default async function DealsPage() {
                   {overdueInLedger && (
                     <Pill kind="overdue" className="self-start">
                       <AlertTriangle className="size-[11px]" />
-                      <span>{money(Number(d.companyOverdueCents))} overdue in Ledger</span>
+                      <span>{money(Number(d.companyOverdueCents))} overdue in the books</span>
                     </Pill>
                   )}
                   {d.status === "won" && d.ledgerInvoiceNumber && (
@@ -155,7 +155,7 @@ export default async function DealsPage() {
                       ) : (
                         <>
                           <Check className="size-[11px]" />
-                          <span>Paid in Ledger</span>
+                          <span>Paid in the books</span>
                         </>
                       )}
                     </Pill>

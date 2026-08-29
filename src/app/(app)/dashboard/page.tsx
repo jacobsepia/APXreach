@@ -5,7 +5,7 @@ import {
   companies,
   db,
   deals,
-  ledgerInvoices,
+  syncedInvoices,
   pipelineStages,
 } from "@/db";
 import { money, relativeDay } from "@/lib/format";
@@ -44,16 +44,16 @@ export default async function DashboardPage() {
         .from(deals)
         .where(and(eq(deals.status, "won"), gte(deals.wonAt, monthStart))),
       db
-        .select({ total: sql<number>`coalesce(sum(${ledgerInvoices.outstandingCents}), 0)` })
-        .from(ledgerInvoices)
-        .where(ne(ledgerInvoices.status, "paid")),
+        .select({ total: sql<number>`coalesce(sum(${syncedInvoices.outstandingCents}), 0)` })
+        .from(syncedInvoices)
+        .where(ne(syncedInvoices.status, "paid")),
       db
         .select({
-          total: sql<number>`coalesce(sum(${ledgerInvoices.outstandingCents}), 0)`,
+          total: sql<number>`coalesce(sum(${syncedInvoices.outstandingCents}), 0)`,
           count: sql<number>`count(*)`,
         })
-        .from(ledgerInvoices)
-        .where(eq(ledgerInvoices.status, "overdue")),
+        .from(syncedInvoices)
+        .where(eq(syncedInvoices.status, "overdue")),
       db
         .select({
           id: activities.id,
@@ -163,7 +163,7 @@ export default async function DashboardPage() {
           <div className="mt-1.5 font-display text-[25px] font-semibold tracking-[-0.5px] text-foreground">
             {money(ar)}
           </div>
-          <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">From APX Ledger</div>
+          <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">From the books</div>
         </Card>
         <Card index={3} className="px-[18px] py-4">
           <Caps className="flex items-center gap-1.5">
@@ -258,7 +258,7 @@ export default async function DashboardPage() {
               <span className="size-2 shrink-0 rounded-full bg-[var(--accent-hot)]" />
               <span className="flex-1 text-[13px] text-foreground">
                 <strong className="font-semibold">{c.name}</strong> has {money(c.overdueCents)}{" "}
-                overdue in Ledger — and {money(Number(c.openDealTotal))} of open pipeline with
+                overdue in the books — and {money(Number(c.openDealTotal))} of open pipeline with
                 you. Settle one before pushing the other.
               </span>
               <Link

@@ -35,7 +35,7 @@ export default async function CompaniesPage() {
             <span className="gradient-text-flow">Companies</span>
           </h1>
         <p className="mt-0.5 text-[13px] text-muted-foreground">
-          {rows.length} companies · what they owe comes straight from APX Ledger
+          {rows.length} companies · what they owe comes straight from the books
         </p>
       </div>
 
