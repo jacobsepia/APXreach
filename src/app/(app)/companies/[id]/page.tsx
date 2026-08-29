@@ -127,8 +127,8 @@ export default async function CompanyPage({
           </div>
           <div>
             <div className="flex items-center gap-2.5">
-              <span className="font-display text-[22px] font-bold tracking-[-0.5px] text-foreground">
-                {company.name}
+              <span className="font-display text-[22px] font-bold tracking-[-0.5px]">
+                <span className="gradient-text-flow">{company.name}</span>
               </span>
               <Pill kind={company.lifecycleStage === "customer" ? "customer" : company.lifecycleStage === "opportunity" ? "opportunity" : "lead"}>
                 {company.lifecycleStage.charAt(0).toUpperCase() + company.lifecycleStage.slice(1)}

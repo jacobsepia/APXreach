@@ -31,15 +31,15 @@ export default async function CompaniesPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-[-0.6px] text-foreground">
-          Companies
-        </h1>
+        <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
+            <span className="gradient-text-flow">Companies</span>
+          </h1>
         <p className="mt-0.5 text-[13px] text-muted-foreground">
           {rows.length} companies · what they owe comes straight from APX Ledger
         </p>
       </div>
 
-      <Card className="overflow-hidden">
+      <Card index={0} className="overflow-hidden">
         <div className="grid h-10 grid-cols-[240px_170px_120px_70px_140px_120px_120px] items-center gap-3 border-b border-border bg-[image:var(--gradient-table-head)] px-4 text-[11px] font-semibold tracking-[0.05em] text-[var(--text-tertiary)] uppercase">
           <span>Company</span>
           <span>City</span>
@@ -52,7 +52,7 @@ export default async function CompaniesPage() {
         {rows.map((row, i) => (
           <div
             key={row.id}
-            className={`grid h-[46px] grid-cols-[240px_170px_120px_70px_140px_120px_120px] items-center gap-3 px-4 text-[13px] ${i < rows.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
+            className={`transition-colors hover:bg-[var(--tint)] grid h-[46px] grid-cols-[240px_170px_120px_70px_140px_120px_120px] items-center gap-3 px-4 text-[13px] ${i < rows.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
           >
             <span className="min-w-0">
               <Link

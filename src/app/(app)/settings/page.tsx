@@ -25,9 +25,9 @@ export default async function SettingsPage({
 
   return (
     <div className="flex max-w-2xl flex-col gap-4">
-      <h1 className="font-display text-2xl font-bold tracking-[-0.6px] text-foreground">
-        Settings
-      </h1>
+      <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
+            <span className="gradient-text-flow">Settings</span>
+          </h1>
 
       <Card className="px-[18px] py-4">
         <div className="flex items-center justify-between">

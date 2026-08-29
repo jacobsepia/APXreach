@@ -79,8 +79,8 @@ export default async function DealsPage() {
     <div className="flex flex-col gap-[18px]">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-[-0.6px] text-foreground">
-            Deals
+          <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
+            <span className="gradient-text-flow">Deals</span>
           </h1>
           <p className="mt-0.5 text-[13px] text-muted-foreground">
             {pipeline.name} · {money(openTotal)} open across {openCount} deals
@@ -120,7 +120,7 @@ export default async function DealsPage() {
               return (
                 <Card
                   key={d.id}
-                  className={`flex flex-col gap-1.5 rounded-xl px-3.5 py-3 ${
+                  className={`apx-hover flex flex-col gap-1.5 rounded-xl px-3.5 py-3 ${
                     overdueInLedger
                       ? "border-[color-mix(in_srgb,var(--accent-hot)_35%,transparent)]"
                       : isQuiet

@@ -56,8 +56,8 @@ export default async function ContactsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-[-0.6px] text-foreground">
-            Contacts
+          <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
+            <span className="gradient-text-flow">Contacts</span>
           </h1>
           <p className="mt-0.5 text-[13px] text-muted-foreground">
             {total} people · {customerCount} belong to paying customers in APX Ledger
@@ -90,7 +90,7 @@ export default async function ContactsPage() {
         </span>
       </div>
 
-      <Card className="overflow-hidden">
+      <Card index={0} className="overflow-hidden">
         <div className="grid h-10 grid-cols-[220px_200px_minmax(0,1fr)_120px_70px_110px_110px] items-center gap-3 border-b border-border bg-[image:var(--gradient-table-head)] px-4 text-[11px] font-semibold tracking-[0.05em] text-[var(--text-tertiary)] uppercase">
           <span>Name</span>
           <span>Company</span>
@@ -103,7 +103,7 @@ export default async function ContactsPage() {
         {rows.map((row, i) => (
           <div
             key={row.id}
-            className={`grid h-[46px] grid-cols-[220px_200px_minmax(0,1fr)_120px_70px_110px_110px] items-center gap-3 px-4 text-[13px] ${i < rows.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
+            className={`transition-colors hover:bg-[var(--tint)] grid h-[46px] grid-cols-[220px_200px_minmax(0,1fr)_120px_70px_110px_110px] items-center gap-3 px-4 text-[13px] ${i < rows.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
           >
             <span className="flex min-w-0 items-center gap-2.5">
               <Avatar name={`${row.firstName} ${row.lastName}`} />

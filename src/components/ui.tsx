@@ -1,19 +1,28 @@
 import { cn } from "@/lib/utils";
 
-/* The house card: white, hairline border, 16px corners, whisper of a shadow. */
+/*
+ * The house card: white, hairline border, 16px corners, whisper of a shadow —
+ * and the family signature, a 1px accent rail travelling across the top.
+ * `reveal` + an optional index stagger the entrance the way Ledger's panels do.
+ */
 export function Card({
   className,
   children,
+  index,
 }: {
   className?: string;
   children: React.ReactNode;
+  /** Stagger position for the entrance animation; omit for no reveal. */
+  index?: number;
 }) {
   return (
     <div
       className={cn(
-        "rounded-2xl border border-border bg-white shadow-[var(--edge-top)]",
+        "accent-rail relative overflow-hidden rounded-2xl border border-border bg-white shadow-[var(--edge-top)]",
+        index !== undefined && "reveal",
         className,
       )}
+      style={index !== undefined ? ({ "--i": index } as React.CSSProperties) : undefined}
     >
       {children}
     </div>

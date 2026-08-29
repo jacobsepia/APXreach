@@ -1,8 +1,19 @@
-import { asc, eq, ne } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lt, ne, sql } from "drizzle-orm";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Topbar } from "@/components/topbar";
 import { QuickCreate } from "@/components/quick-create";
-import { companies, db, ledgerConnections, pipelineStages, workspaces } from "@/db";
+import { Ticker, type TickerItem } from "@/components/ticker";
+import { money } from "@/lib/format";
+import {
+  activities,
+  companies,
+  db,
+  deals,
+  ledgerConnections,
+  ledgerInvoices,
+  pipelineStages,
+  workspaces,
+} from "@/db";
 
 export const dynamic = "force-dynamic";
 
@@ -20,28 +31,130 @@ export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const [workspace] = await db.select().from(workspaces).limit(1);
-  const [connection, companyOptions, stageOptions] = workspace
-    ? await Promise.all([
-        db
-          .select()
-          .from(ledgerConnections)
-          .where(eq(ledgerConnections.workspaceId, workspace.id))
-          .limit(1)
-          .then((rows) => rows[0]),
-        db
-          .select({ id: companies.id, name: companies.name })
-          .from(companies)
-          .where(eq(companies.workspaceId, workspace.id))
-          .orderBy(asc(companies.name)),
-        db
-          .select({ id: pipelineStages.id, name: pipelineStages.name })
-          .from(pipelineStages)
-          .where(ne(pipelineStages.kind, "lost"))
-          .orderBy(asc(pipelineStages.displayOrder)),
-      ])
-    : [undefined, [], []];
+
+  if (!workspace) {
+    return <div className="p-8 text-sm text-muted-foreground">No workspace yet — run the seed.</div>;
+  }
+
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 86_400_000);
+
+  const [
+    connection,
+    companyOptions,
+    stageOptions,
+    openRow,
+    wonRow,
+    arRow,
+    overdueRow,
+    taskRow,
+    quietRow,
+  ] = await Promise.all([
+    db
+      .select()
+      .from(ledgerConnections)
+      .where(eq(ledgerConnections.workspaceId, workspace.id))
+      .limit(1)
+      .then((rows) => rows[0]),
+    db
+      .select({ id: companies.id, name: companies.name })
+      .from(companies)
+      .where(eq(companies.workspaceId, workspace.id))
+      .orderBy(asc(companies.name)),
+    db
+      .select({ id: pipelineStages.id, name: pipelineStages.name })
+      .from(pipelineStages)
+      .where(ne(pipelineStages.kind, "lost"))
+      .orderBy(asc(pipelineStages.displayOrder)),
+    db
+      .select({ total: sql<number>`coalesce(sum(${deals.amountCents}), 0)`, count: sql<number>`count(*)` })
+      .from(deals)
+      .where(eq(deals.status, "open"))
+      .then((r) => r[0]),
+    db
+      .select({ total: sql<number>`coalesce(sum(${deals.amountCents}), 0)` })
+      .from(deals)
+      .where(and(eq(deals.status, "won"), gte(deals.wonAt, monthStart)))
+      .then((r) => r[0]),
+    db
+      .select({ total: sql<number>`coalesce(sum(${ledgerInvoices.outstandingCents}), 0)` })
+      .from(ledgerInvoices)
+      .where(ne(ledgerInvoices.status, "paid"))
+      .then((r) => r[0]),
+    db
+      .select({ total: sql<number>`coalesce(sum(${ledgerInvoices.outstandingCents}), 0)`, count: sql<number>`count(*)` })
+      .from(ledgerInvoices)
+      .where(eq(ledgerInvoices.status, "overdue"))
+      .then((r) => r[0]),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(activities)
+      .where(and(eq(activities.type, "task"), isNull(activities.completedAt)))
+      .then((r) => r[0]),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(deals)
+      .where(and(eq(deals.status, "open"), lt(deals.updatedAt, fourteenDaysAgo)))
+      .then((r) => r[0]),
+  ]);
 
   const connected = connection?.status === "connected";
+  const overdueCount = Number(overdueRow?.count ?? 0);
+  const quietCount = Number(quietRow?.count ?? 0);
+
+  /*
+   * The ticker carries only things that are true and worth acting on. Overdue
+   * money leads — nothing else on screen matters while a customer sits unpaid.
+   */
+  const ticker: TickerItem[] = [
+    ...(overdueCount > 0
+      ? [
+          {
+            label: "Overdue in Ledger",
+            value: `${money(Number(overdueRow?.total ?? 0))} · ${overdueCount}`,
+            href: "/companies",
+            tone: "alert" as const,
+            ledger: true,
+          },
+        ]
+      : []),
+    {
+      label: "Open pipeline",
+      value: `${money(Number(openRow?.total ?? 0))} · ${Number(openRow?.count ?? 0)}`,
+      href: "/deals",
+    },
+    {
+      label: "Won this month",
+      value: money(Number(wonRow?.total ?? 0)),
+      href: "/deals",
+      tone: "ok",
+    },
+    {
+      label: "Receivables",
+      value: money(Number(arRow?.total ?? 0)),
+      href: "/companies",
+      ledger: true,
+    },
+    {
+      label: "Open tasks",
+      value: String(Number(taskRow?.count ?? 0)),
+      href: "/tasks",
+      tone: Number(taskRow?.count ?? 0) > 0 ? "warn" : "ok",
+    },
+    ...(quietCount > 0
+      ? [
+          {
+            label: "Deals gone quiet",
+            value: String(quietCount),
+            href: "/deals",
+            tone: "warn" as const,
+          },
+        ]
+      : []),
+    { label: "Companies", value: String(companyOptions.length), href: "/companies" },
+  ];
 
   return (
     <div className="flex min-h-screen w-full">
@@ -50,8 +163,9 @@ export default async function AppLayout({
         syncedLabel={connected ? syncedLabel(connection?.lastSyncAt ?? null) : null}
       />
       <div className="flex min-w-0 flex-1 flex-col">
+        <Ticker items={ticker} />
         <Topbar
-          workspaceName={workspace?.name ?? "APX Reach"}
+          workspaceName={workspace.name}
           quickCreate={<QuickCreate companies={companyOptions} stages={stageOptions} />}
         />
         <main className="flex-1 px-8 py-7">{children}</main>

@@ -122,11 +122,11 @@ export default async function DashboardPage() {
           {attentionCount > 0 ? (
             <>
               {attentionCount === 1 ? "One thing needs" : `${["", "One", "Two", "Three", "Four", "Five"][attentionCount] ?? attentionCount} things need`} you this{" "}
-              <span className="text-[var(--accent-primary)]">morning</span>.
+              <span className="gradient-text-flow">morning</span>.
             </>
           ) : (
             <>
-              All quiet, for <span className="text-[var(--accent-primary)]">now</span>.
+              All quiet, for <span className="gradient-text-flow">now</span>.
             </>
           )}
         </h1>
@@ -137,7 +137,7 @@ export default async function DashboardPage() {
 
       {/* Stat band */}
       <div className="grid grid-cols-4 gap-3.5">
-        <Card className="px-[18px] py-4">
+        <Card index={0} className="px-[18px] py-4">
           <Caps>Open pipeline</Caps>
           <div className="mt-1.5 font-display text-[25px] font-semibold tracking-[-0.5px] text-foreground">
             {money(openTotal)}
@@ -146,7 +146,7 @@ export default async function DashboardPage() {
             {openCount} open deals
           </div>
         </Card>
-        <Card className="px-[18px] py-4">
+        <Card index={1} className="px-[18px] py-4">
           <Caps>Won this month</Caps>
           <div className="mt-1.5 font-display text-[25px] font-semibold tracking-[-0.5px] text-foreground">
             {money(Number(won.total))}
@@ -155,7 +155,7 @@ export default async function DashboardPage() {
             {Number(won.count)} deals closed
           </div>
         </Card>
-        <Card className="px-[18px] py-4">
+        <Card index={2} className="px-[18px] py-4">
           <Caps className="flex items-center gap-1.5">
             <span>Receivables outstanding</span>
             <LedgerDot />
@@ -165,7 +165,7 @@ export default async function DashboardPage() {
           </div>
           <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">From APX Ledger</div>
         </Card>
-        <Card className="px-[18px] py-4">
+        <Card index={3} className="px-[18px] py-4">
           <Caps className="flex items-center gap-1.5">
             <span>Overdue</span>
             <LedgerDot />
@@ -181,7 +181,7 @@ export default async function DashboardPage() {
 
       {/* Middle row */}
       <div className="grid grid-cols-[3fr_2fr] gap-3.5">
-        <Card className="p-5">
+        <Card index={4} className="p-5">
           <div className="font-display text-[15px] font-semibold text-foreground">
             Pipeline by stage
           </div>
@@ -209,7 +209,7 @@ export default async function DashboardPage() {
           </div>
         </Card>
 
-        <Card className="flex flex-col p-5">
+        <Card index={5} className="flex flex-col p-5">
           <div className="flex items-baseline justify-between">
             <div className="font-display text-[15px] font-semibold text-foreground">
               Due today
@@ -244,10 +244,10 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* What the books are telling you */}
-      <Card className="p-5">
+      {/* What the <span className="gradient-text-flow">books</span> are telling you */}
+      <Card index={6} className="p-5">
         <div className="font-display text-[15px] font-semibold text-foreground">
-          What the books are telling you
+          What the <span className="gradient-text-flow">books</span> are telling you
         </div>
         <div className="mt-1 flex flex-col">
           {riskCompanies.map((c) => (

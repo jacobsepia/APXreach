@@ -39,8 +39,8 @@ export default async function TasksPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-[-0.6px] text-foreground">
-            Tasks
+          <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
+            <span className="gradient-text-flow">Tasks</span>
           </h1>
           <p className="mt-0.5 text-[13px] text-muted-foreground">
             {rows.length} open · tick one off and it leaves the list
@@ -48,7 +48,7 @@ export default async function TasksPage() {
         </div>
         <QuickCreate companies={companyOptions} stages={[]} only="task" buttonLabel="New task" />
       </div>
-      <Card className="overflow-hidden">
+      <Card index={0} className="overflow-hidden">
         {rows.map((task, i) => {
           const overdue =
             task.dueAt !== null &&
