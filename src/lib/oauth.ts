@@ -184,6 +184,28 @@ async function attemptToken(
     return { ok: false, error: `Could not reach ${provider.label}.`, clientRejected: false };
   }
 
+  /*
+   * A redirect to another host drops the Authorization header on the way, so
+   * `basic` arrives as an anonymous request and is refused as invalid_client
+   * while `post`, whose credentials ride in the body a 308 preserves, sails
+   * through. Two methods disagreeing about the same correct secret is the
+   * signature of exactly this, and it is worth naming rather than rediscovering.
+   */
+  if (response.redirected) {
+    const from = new URL(provider.oauth!.tokenUrl).origin;
+    const to = new URL(response.url).origin;
+    if (from !== to) {
+      return {
+        ok: false,
+        error:
+          `${provider.label}'s token endpoint redirected from ${from} to ${to}, and a ` +
+          `redirect across hosts strips the Authorization header. Point ${provider.label}'s ` +
+          `base URL at ${to} so the request is not redirected.`,
+        clientRejected: false,
+      };
+    }
+  }
+
   let parsed: Record<string, unknown>;
   try {
     parsed = (await response.json()) as Record<string, unknown>;

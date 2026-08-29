@@ -17,7 +17,16 @@ import type {
  * Money is integer cents, day-dates YYYY-MM-DD; shapes mirror serialize.ts.
  */
 
-const BASE_URL = process.env.APXLEDGER_BASE_URL ?? "https://apxledger.ca";
+/*
+ * The CANONICAL host, with the www. Ledger serves apxledger.ca as a 308 to
+ * www.apxledger.ca, and a redirect across hosts strips the Authorization
+ * header — the 308 keeps the body, so a token request authenticating in the
+ * body survived while every header credential silently vanished in flight.
+ * Reading the books needs a Bearer token, which is a header, so the apex host
+ * cannot work at all. Point this at the host that answers, never at one that
+ * redirects.
+ */
+const BASE_URL = process.env.APXLEDGER_BASE_URL ?? "https://www.apxledger.ca";
 
 const connectionSchema = z.object({
   companyId: z.string(),
@@ -49,6 +58,23 @@ const invoiceSchema = z.object({
   amountDueCents: z.number().int(),
 });
 
+/**
+ * A redirect to another host arrives with the Authorization header removed,
+ * so the request that lands is anonymous and the answer is a 401 that looks
+ * exactly like a bad credential. Name it instead of letting it masquerade.
+ */
+function crossHostRedirect(requested: string, response: Response): string | null {
+  if (!response.redirected) return null;
+  const from = new URL(requested).origin;
+  const to = new URL(response.url).origin;
+  if (from === to) return null;
+  return (
+    `${from} redirected to ${to}, and a redirect across hosts strips the ` +
+    `Authorization header — the credential never arrives. Set APXLEDGER_BASE_URL ` +
+    `to ${to}, the host that answers directly.`
+  );
+}
+
 async function ledgerFetch(
   apiKey: string,
   path: string,
@@ -62,6 +88,8 @@ async function ledgerFetch(
   } catch {
     return { ok: false, error: `Could not reach ${BASE_URL} — is it online?` };
   }
+  const detoured = crossHostRedirect(`${BASE_URL}${path}`, response);
+  if (detoured) return { ok: false, error: detoured };
   if (!response.ok) {
     let message = `Ledger answered ${response.status}.`;
     try {
