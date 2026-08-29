@@ -183,6 +183,21 @@ async function postToken(
      * who has no way to connect it to a deployment setting.
      */
     if (code === "invalid_client" || response.status === 401) {
+      /*
+       * Which half of the pair is wrong is invisible from out here, and the
+       * secret itself must never be logged — but its sha256 prefix is safe to
+       * write down and is exactly what the provider stores, so it can be read
+       * off these logs and compared against their record directly. Without it
+       * this failure is indistinguishable from every other way a deployment
+       * can hold the wrong value.
+       */
+      const fingerprint = createHash("sha256")
+        .update(credentials.clientSecret, "utf8")
+        .digest("hex")
+        .slice(0, 10);
+      console.error(
+        `[oauth] ${provider.id} rejected the client — client_id=${credentials.clientId} secret_length=${credentials.clientSecret.length} secret_sha256=${fingerprint}`,
+      );
       return {
         ok: false,
         error:
