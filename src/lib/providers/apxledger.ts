@@ -8,14 +8,16 @@ import type {
 
 /*
  * Provider #1: APX Ledger, through its platform API — the same door Collect
- * uses. Phase 1 of the platform plan: a company-scoped API key and the
- * read-only `/api/v1` walks ({ items, nextCursor }); money in integer cents,
- * day-dates as YYYY-MM-DD. Shapes mirror Ledger's serialize.ts. OAuth2 and
- * webhooks replace the pasted key and the polling when Ledger's next platform
- * phases land — inside this file, without touching the rest of Reach.
+ * and Planner use. Authorization is OAuth2 authorization-code with PKCE
+ * against Ledger's own consent screen: the person picks the company and
+ * approves the scopes there, and Reach receives tokens. The read-only
+ * `/api/v1` then walks ({ items, nextCursor }) with the access token in the
+ * same Authorization header a key would use — Ledger's API resolves both
+ * credential kinds to one grant, so nothing below the auth layer cares.
+ * Money is integer cents, day-dates YYYY-MM-DD; shapes mirror serialize.ts.
  */
 
-const BASE_URL = "https://apxledger.ca";
+const BASE_URL = process.env.APXLEDGER_BASE_URL ?? "https://apxledger.ca";
 
 const connectionSchema = z.object({
   companyId: z.string(),
@@ -99,7 +101,22 @@ export const apxledger: AccountingProvider = {
   id: "apxledger",
   label: "APX Ledger",
   connectHint:
-    "In APX Ledger: Settings → API access → mint a company-scoped key with the contacts, invoices and payments read scopes.",
+    "You'll be sent to APX Ledger to choose a company and approve what Reach may read. Nothing is copied by hand, and you can revoke it from Ledger at any time.",
+
+  oauth: {
+    authorizeUrl: `${BASE_URL}/oauth/authorize`,
+    tokenUrl: `${BASE_URL}/api/oauth/token`,
+    revokeUrl: `${BASE_URL}/api/oauth/revoke`,
+    /* Read-only, and only what the CRM screens actually display. */
+    scopes: [
+      "accounting.contacts.read",
+      "accounting.invoices.read",
+      "accounting.payments.read",
+      "accounting.settings.read",
+    ],
+    clientIdEnv: "APXLEDGER_CLIENT_ID",
+    clientSecretEnv: "APXLEDGER_CLIENT_SECRET",
+  },
 
   async validate(credentials) {
     const result = await ledgerFetch(credentials, "/api/v1/connections");

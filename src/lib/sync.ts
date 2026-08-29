@@ -1,35 +1,45 @@
 import { and, eq } from "drizzle-orm";
-import { activities, companies, connections, db, syncedInvoices } from "@/db";
-import { getProvider } from "@/lib/providers";
+import { activities, companies, connections, db, syncedInvoices, workspaces } from "@/db";
+import { getProvider, type AccountingProvider, type OAuthTokens } from "@/lib/providers";
+import { clientCredentials, refreshTokens } from "@/lib/oauth";
 
 /*
  * The provider-agnostic sync engine. It never knows which system the books
- * live in: a provider validates a credential and hands back normalized
- * contacts and invoices; this file turns them into CRM companies, the invoice
- * mirror, and the rollups every screen reads. Scheduled runs and webhook
- * triggers call the same runSync.
+ * live in: a provider hands back normalized contacts and invoices, and this
+ * file turns them into CRM companies, the invoice mirror, and the rollups
+ * every screen reads. Scheduled runs and webhook triggers call the same
+ * runSync.
  */
 
-export async function connectBooks(
-  workspaceId: string,
-  providerId: string,
-  credentials: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const provider = getProvider(providerId);
-  if (!provider) return { ok: false, error: "That provider isn't available yet." };
+type Outcome = { ok: true } | { ok: false; error: string };
 
-  const result = await provider.validate(credentials);
-  if (!result.ok) return result;
+/**
+ * Store the grant the consent screen just produced. The provider itself tells
+ * us which company was consented to — Reach never asks the person to identify
+ * it, because the token already knows.
+ */
+export async function saveConnection(
+  provider: AccountingProvider,
+  tokens: OAuthTokens,
+): Promise<Outcome> {
+  const [workspace] = await db.select({ id: workspaces.id }).from(workspaces).limit(1);
+  if (!workspace) return { ok: false, error: "No workspace yet." };
+
+  const identified = await provider.validate(tokens.accessToken);
+  if (!identified.ok) return identified;
 
   const values = {
-    workspaceId,
+    workspaceId: workspace.id,
     provider: provider.id,
     providerLabel: provider.label,
-    companyName: result.value.name,
-    externalCompanyId: result.value.externalId,
-    credentials,
-    baseCurrency: result.value.currency,
-    scopes: result.value.scopes.join(" "),
+    companyName: identified.value.name,
+    externalCompanyId: identified.value.externalId,
+    credentials: null,
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    tokenExpiresAt: tokens.expiresAt,
+    baseCurrency: identified.value.currency,
+    scopes: (tokens.scopes.length ? tokens.scopes : identified.value.scopes).join(" "),
     status: "connected" as const,
     lastSyncError: null,
   };
@@ -37,13 +47,79 @@ export async function connectBooks(
   const [existing] = await db
     .select({ id: connections.id })
     .from(connections)
-    .where(eq(connections.workspaceId, workspaceId));
+    .where(eq(connections.workspaceId, workspace.id));
   if (existing) {
     await db.update(connections).set(values).where(eq(connections.id, existing.id));
   } else {
     await db.insert(connections).values(values);
   }
+
+  /* First sync immediately: the point of connecting is to see your books. */
+  await runSync(workspace.id);
   return { ok: true };
+}
+
+type ConnectionRow = typeof connections.$inferSelect;
+
+/**
+ * The credential to call the provider with, refreshed if it is about to
+ * expire. Ledger rotates refresh tokens and treats a reused one as theft, so
+ * the new pair is persisted before anything is done with it, and a refusal
+ * clears the tokens rather than leaving a poisoned pair to be retried.
+ */
+async function credentialFor(
+  provider: AccountingProvider,
+  connection: ConnectionRow,
+): Promise<{ ok: true; credential: string } | { ok: false; error: string }> {
+  if (!provider.oauth) {
+    return connection.credentials
+      ? { ok: true, credential: connection.credentials }
+      : { ok: false, error: "No credential on file — connect first." };
+  }
+
+  const expiresSoon =
+    connection.tokenExpiresAt !== null &&
+    connection.tokenExpiresAt.getTime() - Date.now() < 60_000;
+
+  if (connection.accessToken && !expiresSoon) {
+    return { ok: true, credential: connection.accessToken };
+  }
+  if (!connection.refreshToken) {
+    return { ok: false, error: "The connection expired — reconnect to continue." };
+  }
+
+  const credentials = clientCredentials(provider);
+  if (!credentials.ok) return credentials;
+
+  const refreshed = await refreshTokens({
+    provider,
+    credentials: credentials.value,
+    refreshToken: connection.refreshToken,
+  });
+  if (!refreshed.ok) {
+    await db
+      .update(connections)
+      .set({
+        accessToken: null,
+        refreshToken: null,
+        tokenExpiresAt: null,
+        status: "disconnected",
+        lastSyncError: refreshed.error,
+      })
+      .where(eq(connections.id, connection.id));
+    return { ok: false, error: `${provider.label} ended the connection: ${refreshed.error}` };
+  }
+
+  await db
+    .update(connections)
+    .set({
+      accessToken: refreshed.value.accessToken,
+      refreshToken: refreshed.value.refreshToken ?? connection.refreshToken,
+      tokenExpiresAt: refreshed.value.expiresAt,
+      status: "connected",
+    })
+    .where(eq(connections.id, connection.id));
+  return { ok: true, credential: refreshed.value.accessToken };
 }
 
 export async function runSync(workspaceId: string): Promise<void> {
@@ -61,11 +137,14 @@ export async function runSync(workspaceId: string): Promise<void> {
       .where(eq(connections.id, connection.id));
   };
 
-  if (!connection?.credentials || !connection.externalCompanyId || !provider) {
-    return fail("No credential on file — connect first.");
+  if (!connection || !provider || !connection.externalCompanyId) {
+    return fail("No connection on file — connect your books first.");
   }
 
-  const pulled = await provider.pull(connection.credentials, connection.externalCompanyId);
+  const credential = await credentialFor(provider, connection);
+  if (!credential.ok) return fail(credential.error);
+
+  const pulled = await provider.pull(credential.credential, connection.externalCompanyId);
   if (!pulled.ok) return fail(pulled.error);
   const { contacts, invoices } = pulled.value;
 

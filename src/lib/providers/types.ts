@@ -39,12 +39,41 @@ export interface NormalizedInvoice {
 
 export type ProviderResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
+/*
+ * How a provider is authorized. Every system worth connecting to speaks
+ * OAuth2 authorization-code + PKCE — APX Ledger, Xero and QuickBooks all do —
+ * so this is the only ceremony Reach implements. The person clicks Connect,
+ * approves on the provider's own consent screen, and Reach never sees, asks
+ * for, or stores a credential a human had to copy.
+ */
+export interface ProviderOAuth {
+  authorizeUrl: string;
+  tokenUrl: string;
+  /** RFC 7009 — hand back a token and the grant ends. */
+  revokeUrl?: string;
+  /** What Reach asks for. The consent screen shows these to the person. */
+  scopes: string[];
+  /** Env var names holding this client's registered credentials. */
+  clientIdEnv: string;
+  clientSecretEnv: string;
+}
+
+export interface OAuthTokens {
+  accessToken: string;
+  refreshToken: string | null;
+  /** Absolute expiry, computed from the response's expires_in. */
+  expiresAt: Date | null;
+  scopes: string[];
+}
+
 export interface AccountingProvider {
   id: ProviderId;
   /** Human name, shown in the UI and on synced-data captions. */
   label: string;
-  /** Where credentials come from, shown under the connect form. */
+  /** One line about what connecting does, shown beside the button. */
   connectHint: string;
+  /** The OAuth endpoints and scopes. Absent = not yet implemented. */
+  oauth?: ProviderOAuth;
   /** Check the credential and identify the company it opens. */
   validate(credentials: string): Promise<ProviderResult<ProviderCompany>>;
   /** Pull everything the CRM mirrors. Incremental cursors come later. */

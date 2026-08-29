@@ -16,8 +16,9 @@ import {
   pipelineStages,
   workspaces,
 } from "@/db";
-import { connectBooks, runSync } from "@/lib/sync";
-import { getProvider, type ProviderId } from "@/lib/providers";
+import { runSync } from "@/lib/sync";
+import { getProvider } from "@/lib/providers";
+import { clientCredentials, revokeToken } from "@/lib/oauth";
 
 /*
  * Phase 1 mutations, as server actions. One workspace for now — the actions
@@ -188,24 +189,6 @@ export async function setDealStage(formData: FormData): Promise<void> {
   revalidatePath("/dashboard");
 }
 
-export async function connectBooksAction(formData: FormData): Promise<void> {
-  const wsId = await workspaceId();
-  const providerId = trimmed.min(1, "Pick a provider.").parse(formData.get("provider"));
-  const provider = getProvider(providerId as ProviderId);
-  if (!provider) {
-    redirect(`/settings?error=${encodeURIComponent("That provider isn't available yet.")}`);
-  }
-  const credentials = trimmed
-    .min(1, "Paste the API key.")
-    .parse(formData.get("credentials"));
-  const result = await connectBooks(wsId, provider.id, credentials);
-  revalidatePath("/settings");
-  if (!result.ok) {
-    redirect(`/settings?error=${encodeURIComponent(result.error)}`);
-  }
-  redirect("/settings");
-}
-
 export async function syncNow(): Promise<void> {
   const wsId = await workspaceId();
   await runSync(wsId);
@@ -215,11 +198,40 @@ export async function syncNow(): Promise<void> {
   revalidatePath("/contacts");
 }
 
+/*
+ * Disconnecting tells the provider first (RFC 7009 — the grant ends on their
+ * side, not just ours), then forgets every token. Revocation is best-effort:
+ * if it fails, Reach still drops its copy rather than holding credentials the
+ * person asked it to let go of.
+ */
 export async function disconnectBooks(): Promise<void> {
   const wsId = await workspaceId();
-  await db
-    .update(connections)
-    .set({ status: "disconnected", credentials: null })
+  const [connection] = await db
+    .select()
+    .from(connections)
     .where(eq(connections.workspaceId, wsId));
+
+  if (connection) {
+    const provider = getProvider(connection.provider);
+    const token = connection.refreshToken ?? connection.accessToken;
+    if (provider?.oauth && token) {
+      const credentials = clientCredentials(provider);
+      if (credentials.ok) {
+        await revokeToken({ provider, credentials: credentials.value, token });
+      }
+    }
+    await db
+      .update(connections)
+      .set({
+        status: "disconnected",
+        credentials: null,
+        accessToken: null,
+        refreshToken: null,
+        tokenExpiresAt: null,
+      })
+      .where(eq(connections.id, connection.id));
+  }
+
   revalidatePath("/settings");
+  revalidatePath("/dashboard");
 }

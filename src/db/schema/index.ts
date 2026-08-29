@@ -157,9 +157,17 @@ export const connections = pgTable("connections", {
   providerLabel: text("provider_label").notNull(),
   companyName: text("company_name").notNull(),
   externalCompanyId: text("external_company_id"),
-  // The provider credential (API key today, OAuth tokens later). Held
-  // server-side only; move to encrypted storage alongside the auth hardening.
+  /*
+   * The credential, in whichever shape the provider authenticates with.
+   * OAuth providers (APX Ledger) fill the token trio; a provider that only
+   * offers standing keys fills `credentials`. Both are held server-side and
+   * never reach the browser — encrypting them at rest is the next hardening
+   * step, tracked with the auth work.
+   */
   credentials: text("credentials"),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
   baseCurrency: text("base_currency"),
   scopes: text("scopes"),
   status: text("status").default("connected").notNull(),

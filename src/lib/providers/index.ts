@@ -19,4 +19,13 @@ export function getProvider(id: string): AccountingProvider | undefined {
   return providers[id as ProviderId];
 }
 
-export type { AccountingProvider, ProviderId } from "./types";
+export type {
+  AccountingProvider,
+  NormalizedContact,
+  NormalizedInvoice,
+  OAuthTokens,
+  ProviderCompany,
+  ProviderId,
+  ProviderOAuth,
+  ProviderResult,
+} from "./types";

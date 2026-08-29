@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { db, connections } from "@/db";
 import { comingSoon, providers } from "@/lib/providers";
 import { Card, Caps, LedgerDot, Pill } from "@/components/ui";
-import { ConnectBooksForm, SyncNowButton } from "@/components/connect-books";
+import { DisconnectButton, SyncNowButton } from "@/components/connect-books";
 
 export const dynamic = "force-dynamic";
 
@@ -17,12 +18,12 @@ const stamp = new Intl.DateTimeFormat("en-CA", {
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; connected?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, connected: justConnected } = await searchParams;
   const [connection] = await db.select().from(connections).limit(1);
-  const connected = connection?.status === "connected" && connection.credentials;
-  const demoOnly = connection?.status === "connected" && !connection.credentials;
+  const live = connection?.status === "connected" && Boolean(connection.accessToken);
+  const demoOnly = connection?.status === "connected" && !connection.accessToken;
   const available = Object.values(providers);
 
   return (
@@ -32,16 +33,33 @@ export default async function SettingsPage({
           <span className="gradient-text-flow">Settings</span>
         </h1>
         <p className="mt-0.5 text-[13px] text-muted-foreground">
-          Reach reads the books through whichever system keeps them. One
-          connection per workspace for now.
+          Reach reads the books through whichever system keeps them. You approve
+          the connection on their side — nothing is copied by hand.
         </p>
       </div>
 
-      {connected ? (
+      {error && (
+        <Card className="border-[color-mix(in_srgb,var(--accent-hot)_35%,transparent)] px-[18px] py-3">
+          <p className="text-[13px] font-medium text-[#b91c1c]">{error}</p>
+        </Card>
+      )}
+      {justConnected && !error && (
+        <Card className="border-[color-mix(in_srgb,var(--accent-data)_45%,transparent)] px-[18px] py-3">
+          <p className="text-[13px] text-foreground">
+            Connected. The first sync has already run — your books are on the
+            dashboard.
+          </p>
+        </Card>
+      )}
+
+      {live && connection && (
         <Card className="px-[18px] py-4">
           <div className="flex items-center justify-between">
             <Caps>Connected books</Caps>
-            <SyncNowButton />
+            <div className="flex items-center gap-2">
+              <SyncNowButton />
+              <DisconnectButton label={connection.providerLabel} />
+            </div>
           </div>
           <div className="mt-3">
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -50,7 +68,7 @@ export default async function SettingsPage({
               <Pill kind="ledger">{connection.providerLabel}</Pill>
             </div>
             <p className="mt-1.5 text-xs text-[var(--text-tertiary)]">
-              scopes: {connection.scopes ?? "—"}
+              Authorized scopes: {connection.scopes ?? "—"}
               {connection.baseCurrency ? ` · ${connection.baseCurrency}` : ""}
             </p>
             {connection.lastSyncAt && (
@@ -66,25 +84,37 @@ export default async function SettingsPage({
             )}
           </div>
         </Card>
-      ) : null}
+      )}
 
-      {available.map((p) => (
-        <Card key={p.id} className="px-[18px] py-4">
-          <div className="flex items-center justify-between">
-            <Caps>{connected && connection.provider === p.id ? `Replace the ${p.label} key` : p.label}</Caps>
-            <Pill kind="ledger">Available</Pill>
-          </div>
-          {demoOnly && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              The current connection is seeded demo data. Paste a real key to replace it —
-              the next sync writes real figures over the demo rollups.
-            </p>
-          )}
-          <p className="mt-2 text-sm text-muted-foreground">{p.connectHint}</p>
-          <ConnectBooksForm provider={p.id} placeholder="apx_live_…" />
-          {error && <p className="mt-2 text-xs font-medium text-[#b91c1c]">{error}</p>}
-        </Card>
-      ))}
+      {available.map((p) => {
+        const isLive = live && connection?.provider === p.id;
+        return (
+          <Card key={p.id} className="px-[18px] py-4">
+            <div className="flex items-center justify-between">
+              <Caps>{p.label}</Caps>
+              {isLive ? (
+                <Pill kind="ledger">Connected</Pill>
+              ) : (
+                <Pill kind="customer">Available</Pill>
+              )}
+            </div>
+            {demoOnly && !isLive && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                What you&apos;re seeing now is seeded demo data. Connecting replaces it
+                with the real figures on the next sync.
+              </p>
+            )}
+            <p className="mt-2 text-sm text-muted-foreground">{p.connectHint}</p>
+            <Link
+              href={`/api/integrations/${p.id}/start`}
+              prefetch={false}
+              className="mt-3 inline-flex h-9 items-center rounded-[10px] bg-[image:var(--gradient-cta)] px-4 text-[13px] font-medium text-white"
+            >
+              {isLive ? `Reconnect ${p.label}` : `Connect ${p.label}`}
+            </Link>
+          </Card>
+        );
+      })}
 
       {comingSoon.map((p) => (
         <Card key={p.id} className="px-[18px] py-4">
@@ -93,29 +123,33 @@ export default async function SettingsPage({
             <Pill kind="warning">Coming soon</Pill>
           </div>
           <p className="mt-2 text-xs leading-relaxed text-[var(--text-tertiary)]">
-            Same idea, different books: a {p.label} connection will validate a key, pull
-            contacts and open invoices, and feed the same rollups every screen already
-            reads. Implementing it is one provider file — nothing else changes.
+            Same ceremony, different books: {p.label} authorizes the same way and
+            answers with the same normalized contacts and invoices, so the screens
+            you already use light up unchanged. It needs one provider file and a
+            registered client.
           </p>
         </Card>
       ))}
 
       <Card className="px-[18px] py-4">
-        <Caps>How the sync works</Caps>
+        <Caps>How the connection works</Caps>
         <p className="mt-2 text-xs leading-relaxed text-[var(--text-tertiary)]">
-          Every provider hands Reach the same two shapes — contacts and invoices.
-          Contacts become companies, open receivables are mirrored for the books
-          panels, and each company&apos;s outstanding, overdue and year-to-date figures
-          are rolled up. Polling for now; webhooks replace it when they land, and
-          OAuth2 replaces the pasted key once each provider&apos;s consent screen ships.
+          OAuth2 authorization-code with PKCE, against the provider&apos;s own consent
+          screen — the same door APX Collect and APX Planner use. You choose the
+          company and approve the scopes there; Reach receives an access token it
+          refreshes on its own and never shows anyone. Disconnecting revokes the
+          grant at the provider, and you can revoke it from their side at any time.
+          Polling for now; webhooks replace it when they land.
         </p>
       </Card>
 
       <Card className="px-[18px] py-4">
         <Caps>Sign in with APX</Caps>
         <p className="mt-2 text-xs leading-relaxed text-[var(--text-tertiary)]">
-          One identity across Ledger, Collect and Reach — Better Auth against Ledger&apos;s
-          OIDC provider. Next on the roadmap, before real data goes in this database.
+          Ledger already issues id_tokens for the `openid` scope, so one identity
+          across Ledger, Collect, Planner and Reach is a Better Auth provider row
+          on top of the same client — next, now that the data connection speaks
+          OAuth.
         </p>
       </Card>
     </div>
