@@ -26,7 +26,10 @@ import type {
  * cannot work at all. Point this at the host that answers, never at one that
  * redirects.
  */
-const BASE_URL = process.env.APXLEDGER_BASE_URL ?? "https://www.apxledger.ca";
+export const LEDGER_BASE_URL =
+  process.env.APXLEDGER_BASE_URL ?? "https://www.apxledger.ca";
+
+const BASE_URL = LEDGER_BASE_URL;
 
 const connectionSchema = z.object({
   companyId: z.string(),

@@ -2,13 +2,15 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
+import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { db } from "@/db";
 import * as authSchema from "@/db/schema/auth";
+import { LEDGER_BASE_URL } from "@/lib/providers/apxledger";
 
 /*
- * Same posture as APX Ledger's auth. Email/password for now; Sign in with APX
- * (Ledger's OIDC provider) becomes a genericOAuth provider here once Ledger's
- * consent screen ships — same session, same tables.
+ * Same posture as APX Ledger's auth: email and password, plus Sign in with
+ * APX — Ledger is an OIDC provider, so one identity spans Ledger, Collect,
+ * Planner and Reach, on the same session and the same tables.
  */
 
 /**
@@ -37,27 +39,111 @@ function trustedOrigins(): string[] {
  */
 const ALLOWED_SIGNUP_DOMAINS = ["apxsolutions.ca"];
 
+const OUTSIDE_THE_TEAM =
+  "Sign-up is limited to the APX team for now. Ask Jacob for an account.";
+
+/**
+ * Exported to be tested directly: this one predicate is the whole boundary
+ * between the APX team and everyone else, and the ways to fool a domain check
+ * — a second @, a lookalike suffix, an address that merely contains the
+ * domain — are the kind that read as fine and are not.
+ */
+export function allowedDomain(email: string): boolean {
+  const parts = email.trim().toLowerCase().split("@");
+  /* Exactly one @, and the part after it is the whole domain. */
+  if (parts.length !== 2) return false;
+  return ALLOWED_SIGNUP_DOMAINS.includes(parts[1]);
+}
+
+/**
+ * Whether Sign in with APX can be offered at all. The button is hidden rather
+ * than shown broken when the client is not configured — a provider registered
+ * without credentials fails at the consent screen, which is the worst place to
+ * find out.
+ */
+export const ledgerSignInReady = Boolean(
+  process.env.APXLEDGER_CLIENT_ID && process.env.APXLEDGER_CLIENT_SECRET,
+);
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "pg", schema: authSchema }),
   emailAndPassword: {
     enabled: true,
   },
   trustedOrigins: trustedOrigins(),
+  account: {
+    accountLinking: {
+      enabled: true,
+      /*
+       * Ledger may be linked to an existing account by matching email. It is
+       * trusted for that because it is the same company's own identity
+       * provider and it verifies addresses itself — the claim is not taken
+       * from an arbitrary issuer. No other provider gets this.
+       */
+      trustedProviders: ["apxledger"],
+    },
+  },
+  /*
+   * The domain gate, at the point where an account is actually created rather
+   * than on the email sign-up route alone. Signing in with APX creates a user
+   * too, so gating only /sign-up/email would have left a second door into a
+   * CRM that holds the company's books — anyone with a Ledger account could
+   * have walked through it.
+   */
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          if (!allowedDomain(user.email)) {
+            throw new APIError("FORBIDDEN", { message: OUTSIDE_THE_TEAM });
+          }
+          return { data: user };
+        },
+      },
+    },
+  },
   hooks: {
+    /* Same rule, said earlier and more kindly, on the form that has a field. */
     before: createAuthMiddleware(async (ctx) => {
       if (ctx.path === "/sign-up/email") {
         const email = String(
           (ctx.body as { email?: string } | undefined)?.email ?? "",
-        ).toLowerCase();
-        const domain = email.split("@")[1] ?? "";
-        if (!ALLOWED_SIGNUP_DOMAINS.includes(domain)) {
-          throw new APIError("BAD_REQUEST", {
-            message:
-              "Sign-up is limited to the APX team for now. Ask Jacob for an account.",
-          });
+        );
+        if (!allowedDomain(email)) {
+          throw new APIError("BAD_REQUEST", { message: OUTSIDE_THE_TEAM });
         }
       }
     }),
   },
-  plugins: [nextCookies()],
+  plugins: [
+    ...(ledgerSignInReady
+      ? [
+          genericOAuth({
+            config: [
+              {
+                providerId: "apxledger",
+                clientId: process.env.APXLEDGER_CLIENT_ID!,
+                clientSecret: process.env.APXLEDGER_CLIENT_SECRET!,
+                /*
+                 * Named outright rather than discovered. Ledger publishes
+                 * /.well-known/openid-configuration and these are its exact
+                 * values, but discovery is fetched when the provider is
+                 * initialised — on a cold start, over the network. A blip
+                 * there does not fail loudly: the provider is dropped and the
+                 * button stops working while everything else looks fine.
+                 * Three URLs that have never moved are the safer dependency.
+                 */
+                authorizationUrl: `${LEDGER_BASE_URL}/oauth/authorize`,
+                tokenUrl: `${LEDGER_BASE_URL}/api/oauth/token`,
+                userInfoUrl: `${LEDGER_BASE_URL}/api/oauth/userinfo`,
+                scopes: ["openid", "email", "profile"],
+                /* Ledger requires S256 and refuses an authorize without it. */
+                pkce: true,
+              },
+            ],
+          }),
+        ]
+      : []),
+    nextCookies(),
+  ],
 });
