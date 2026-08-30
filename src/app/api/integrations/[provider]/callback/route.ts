@@ -81,7 +81,7 @@ export async function GET(
   });
   if (!tokens.ok) return finish(tokens.error);
 
-  const saved = await saveConnection(provider, tokens.value);
+  const saved = await saveConnection(provider, tokens.value, origin);
   if (!saved.ok) return finish(saved.error);
   return finish();
 }

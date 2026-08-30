@@ -437,6 +437,25 @@ export async function disconnectBooks(): Promise<void> {
 
   if (connection) {
     const provider = getProvider(connection.provider);
+
+    /*
+     * Unsubscribe before revoking — the access token is what authorises the
+     * teardown, so doing it the other way round leaves the provider pinging a
+     * receiver that will refuse it until the failures disable the endpoint.
+     */
+    if (
+      provider?.webhooks &&
+      connection.webhookEndpointId &&
+      connection.externalCompanyId &&
+      connection.accessToken
+    ) {
+      await provider.webhooks.unregister(
+        connection.accessToken,
+        connection.externalCompanyId,
+        connection.webhookEndpointId,
+      );
+    }
+
     const token = connection.refreshToken ?? connection.accessToken;
     if (provider?.oauth && token) {
       const credentials = clientCredentials(provider);
@@ -452,6 +471,8 @@ export async function disconnectBooks(): Promise<void> {
         accessToken: null,
         refreshToken: null,
         tokenExpiresAt: null,
+        webhookEndpointId: null,
+        webhookSecret: null,
       })
       .where(eq(connections.id, connection.id));
   }

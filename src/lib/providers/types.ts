@@ -66,6 +66,33 @@ export interface OAuthTokens {
   scopes: string[];
 }
 
+/**
+ * A push subscription, for providers that offer one. Absent means Reach polls
+ * and nothing else changes.
+ *
+ * Payloads are never trusted for their contents — a ping says only "these
+ * books changed", and Reach answers by running the same sync it already
+ * trusts. So a forged ping costs a sync that finds nothing, which is why
+ * verifying the signature is about spending nobody's rate limit rather than
+ * about protecting the data.
+ */
+export interface ProviderWebhooks {
+  /** Subscribe this deployment's receiver. Returns the id and signing secret. */
+  register(
+    credentials: string,
+    externalCompanyId: string,
+    url: string,
+  ): Promise<ProviderResult<{ endpointId: string; secret: string }>>;
+  /** Best-effort teardown on disconnect; a stale endpoint is theirs to disable. */
+  unregister(
+    credentials: string,
+    externalCompanyId: string,
+    endpointId: string,
+  ): Promise<boolean>;
+  /** True when this body really came from the provider, and recently. */
+  verify(secret: string, body: string, signatureHeader: string): boolean;
+}
+
 export interface AccountingProvider {
   id: ProviderId;
   /** Human name, shown in the UI and on synced-data captions. */
@@ -74,6 +101,8 @@ export interface AccountingProvider {
   connectHint: string;
   /** The OAuth endpoints and scopes. Absent = not yet implemented. */
   oauth?: ProviderOAuth;
+  /** Push instead of poll, where the provider supports it. */
+  webhooks?: ProviderWebhooks;
   /** Check the credential and identify the company it opens. */
   validate(credentials: string): Promise<ProviderResult<ProviderCompany>>;
   /** Pull everything the CRM mirrors. Incremental cursors come later. */

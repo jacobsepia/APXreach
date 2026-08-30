@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import type {
   AccountingProvider,
@@ -128,11 +129,127 @@ async function walk(apiKey: string, path: string): Promise<ProviderResult<unknow
   return { ok: true, value: items };
 }
 
+/*
+ * Ledger's webhook contract, implemented on Reach's side.
+ *
+ * Registration is guarded by accounting.settings.read — the narrowest scope
+ * every consumer already carries — because a ping is thinner than any read:
+ * it names the company and counts what moved, and carries no book data.
+ * Reach therefore needs no new consent to subscribe.
+ */
+const SIGNATURE_TOLERANCE_SECONDS = 300;
+
+async function ledgerSend(
+  apiKey: string,
+  path: string,
+  method: "POST" | "DELETE",
+  body?: unknown,
+): Promise<ProviderResult<unknown>> {
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      cache: "no-store",
+    });
+  } catch {
+    return { ok: false, error: `Could not reach ${BASE_URL} — is it online?` };
+  }
+  const detoured = crossHostRedirect(`${BASE_URL}${path}`, response);
+  if (detoured) return { ok: false, error: detoured };
+  if (!response.ok) {
+    let message = `Ledger answered ${response.status}.`;
+    try {
+      const parsed = (await response.json()) as { error?: { message?: string } };
+      if (parsed?.error?.message) message = parsed.error.message;
+    } catch {
+      /* keep the status-based message */
+    }
+    return { ok: false, error: message };
+  }
+  if (response.status === 204) return { ok: true, value: null };
+  try {
+    return { ok: true, value: await response.json() };
+  } catch {
+    return { ok: true, value: null };
+  }
+}
+
+const webhookRegistrationSchema = z.object({
+  id: z.string(),
+  secret: z.string(),
+});
+
+export const apxledgerWebhooks = {
+  async register(credentials: string, externalCompanyId: string, url: string) {
+    const result = await ledgerSend(
+      credentials,
+      `/api/v1/companies/${externalCompanyId}/webhooks`,
+      "POST",
+      { url },
+    );
+    if (!result.ok) return result;
+    const parsed = webhookRegistrationSchema.safeParse(result.value);
+    if (!parsed.success) {
+      return {
+        ok: false as const,
+        error: "Ledger registered the webhook but did not return a secret.",
+      };
+    }
+    return {
+      ok: true as const,
+      value: { endpointId: parsed.data.id, secret: parsed.data.secret },
+    };
+  },
+
+  async unregister(credentials: string, externalCompanyId: string, endpointId: string) {
+    const result = await ledgerSend(
+      credentials,
+      `/api/v1/companies/${externalCompanyId}/webhooks/${endpointId}`,
+      "DELETE",
+    );
+    return result.ok;
+  },
+
+  /*
+   * `t=<unix>,v1=<hex>` over "<t>.<body>", HMAC-SHA256 with the registration
+   * secret. The timestamp is inside the MAC and checked against a window, so
+   * a captured ping cannot be replayed later; the compare is constant-time
+   * because the header is attacker-supplied.
+   */
+  verify(secret: string, body: string, signatureHeader: string): boolean {
+    const parts = new Map(
+      signatureHeader
+        .split(",")
+        .map((part) => part.trim().split("=", 2))
+        .filter((pair): pair is [string, string] => pair.length === 2),
+    );
+    const timestamp = Number(parts.get("t"));
+    const provided = parts.get("v1");
+    if (!Number.isFinite(timestamp) || !provided) return false;
+    const age = Math.abs(Math.floor(Date.now() / 1000) - timestamp);
+    if (age > SIGNATURE_TOLERANCE_SECONDS) return false;
+
+    const expected = createHmac("sha256", secret)
+      .update(`${timestamp}.${body}`, "utf8")
+      .digest("hex");
+    const a = Buffer.from(expected, "utf8");
+    const b = Buffer.from(provided, "utf8");
+    return a.length === b.length && timingSafeEqual(a, b);
+  },
+};
+
 export const apxledger: AccountingProvider = {
   id: "apxledger",
   label: "APX Ledger",
   connectHint:
     "You'll be sent to APX Ledger to choose a company and approve what Reach may read. Nothing is copied by hand, and you can revoke it from Ledger at any time.",
+
+  webhooks: apxledgerWebhooks,
 
   oauth: {
     authorizeUrl: `${BASE_URL}/oauth/authorize`,

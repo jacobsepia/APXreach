@@ -18,9 +18,46 @@ type Outcome = { ok: true } | { ok: false; error: string };
  * us which company was consented to — Reach never asks the person to identify
  * it, because the token already knows.
  */
+/**
+ * Subscribe this deployment to the provider's pushes, so the books stop being
+ * as current as the last time somebody looked at them.
+ *
+ * Best-effort on purpose: a connection that syncs on a schedule is still a
+ * working connection, so a provider that refuses the subscription must not
+ * turn a successful authorization into a failed one. The failure is recorded
+ * where the next sync will show it rather than thrown at the person.
+ */
+async function subscribeToPushes(
+  provider: AccountingProvider,
+  connectionId: string,
+  externalCompanyId: string,
+  accessToken: string,
+  origin: string,
+): Promise<void> {
+  if (!provider.webhooks) return;
+  const registered = await provider.webhooks.register(
+    accessToken,
+    externalCompanyId,
+    `${origin}/api/webhooks/${provider.id}`,
+  );
+  if (!registered.ok) {
+    console.error(`[webhooks] ${provider.id} refused the subscription: ${registered.error}`);
+    return;
+  }
+  await db
+    .update(connections)
+    .set({
+      webhookEndpointId: registered.value.endpointId,
+      webhookSecret: registered.value.secret,
+    })
+    .where(eq(connections.id, connectionId));
+}
+
 export async function saveConnection(
   provider: AccountingProvider,
   tokens: OAuthTokens,
+  /** This deployment's own origin, which is what the provider will call back. */
+  origin?: string,
 ): Promise<Outcome> {
   const [workspace] = await db.select({ id: workspaces.id }).from(workspaces).limit(1);
   if (!workspace) return { ok: false, error: "No workspace yet." };
@@ -41,6 +78,10 @@ export async function saveConnection(
     baseCurrency: identified.value.currency,
     scopes: (tokens.scopes.length ? tokens.scopes : identified.value.scopes).join(" "),
     status: "connected" as const,
+    /* A reconnect re-subscribes; the old endpoint's secret must not linger. */
+    webhookEndpointId: null,
+    webhookSecret: null,
+    webhookLastPingAt: null,
     lastSyncError: null,
   };
 
@@ -48,10 +89,26 @@ export async function saveConnection(
     .select({ id: connections.id })
     .from(connections)
     .where(eq(connections.workspaceId, workspace.id));
+  let connectionId: string;
   if (existing) {
     await db.update(connections).set(values).where(eq(connections.id, existing.id));
+    connectionId = existing.id;
   } else {
-    await db.insert(connections).values(values);
+    const [created] = await db
+      .insert(connections)
+      .values(values)
+      .returning({ id: connections.id });
+    connectionId = created.id;
+  }
+
+  if (origin) {
+    await subscribeToPushes(
+      provider,
+      connectionId,
+      identified.value.externalId,
+      tokens.accessToken,
+      origin,
+    );
   }
 
   /* First sync immediately: the point of connecting is to see your books. */

@@ -77,6 +77,18 @@ export default async function SettingsPage({
                 {connection.lastSyncSummary ? ` — ${connection.lastSyncSummary}` : ""}
               </p>
             )}
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {connection.webhookSecret ? (
+                <>
+                  {connection.providerLabel} pushes changes as they happen
+                  {connection.webhookLastPingAt
+                    ? ` — last heard ${stamp.format(connection.webhookLastPingAt)}`
+                    : " — nothing has moved since connecting"}
+                </>
+              ) : (
+                <>Checked once a day. Reconnect to have {connection.providerLabel} push instead.</>
+              )}
+            </p>
             {connection.lastSyncError && (
               <p className="mt-1.5 text-xs font-medium text-[#b91c1c]">
                 Last sync failed: {connection.lastSyncError}

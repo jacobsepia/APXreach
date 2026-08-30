@@ -28,4 +28,5 @@ export type {
   ProviderId,
   ProviderOAuth,
   ProviderResult,
+  ProviderWebhooks,
 } from "./types";

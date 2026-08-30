@@ -171,6 +171,15 @@ export const connections = pgTable("connections", {
   baseCurrency: text("base_currency"),
   scopes: text("scopes"),
   status: text("status").default("connected").notNull(),
+  /*
+   * The provider's push subscription, when it offers one. Ledger signs each
+   * ping with this secret, so it is the only thing that separates a real
+   * "the books changed" from anyone who guessed the URL. Held like a token:
+   * server-side, never in the browser, and dropped on disconnect.
+   */
+  webhookEndpointId: text("webhook_endpoint_id"),
+  webhookSecret: text("webhook_secret"),
+  webhookLastPingAt: timestamp("webhook_last_ping_at", { withTimezone: true }),
   lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
   lastSyncSummary: text("last_sync_summary"),
   lastSyncError: text("last_sync_error"),
