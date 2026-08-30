@@ -4,6 +4,7 @@ import { activities, companies, db } from "@/db";
 import { Card } from "@/components/ui";
 import { QuickCreate } from "@/components/quick-create";
 import { TaskCheckbox } from "@/components/task-checkbox";
+import { RecordActions } from "@/components/record-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export default async function TasksPage() {
         subject: activities.subject,
         dueAt: activities.dueAt,
         actorName: activities.actorName,
-        companyId: companies.id,
+        companyId: activities.companyId,
         companyName: companies.name,
       })
       .from(activities)
@@ -78,6 +79,18 @@ export default async function TasksPage() {
               >
                 {task.dueAt ? (overdue ? "Overdue — " : "") + stamp.format(task.dueAt) : "No due date"}
               </span>
+              <RecordActions
+                kind="task"
+                id={task.id}
+                name={task.subject}
+                companies={companyOptions}
+                values={{
+                  subject: task.subject,
+                  dueAt: task.dueAt?.toISOString() ?? null,
+                  companyId: task.companyId,
+                  ownerName: task.actorName,
+                }}
+              />
             </div>
           );
         })}

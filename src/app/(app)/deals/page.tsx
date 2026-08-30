@@ -4,6 +4,7 @@ import { daysBetween, money, shortDate } from "@/lib/format";
 import { Avatar, Card, Pill } from "@/components/ui";
 import { QuickCreate } from "@/components/quick-create";
 import { StageSelect } from "@/components/stage-select";
+import { RecordActions } from "@/components/record-actions";
 import { AlertTriangle, Check, ChevronDown, FileText, Clock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,7 @@ export default async function DealsPage() {
         updatedAt: deals.updatedAt,
         ownerName: deals.ownerName,
         ledgerInvoiceNumber: deals.ledgerInvoiceNumber,
+        companyId: deals.companyId,
         companyName: companies.name,
         companyOverdueCents: companies.overdueCents,
       })
@@ -53,6 +55,12 @@ export default async function DealsPage() {
   const stageOptions = stages
     .filter((s) => s.kind !== "lost")
     .map((s) => ({ id: s.id, name: s.name }));
+  /*
+   * Editing a deal may move it anywhere, Closed lost included. The board's
+   * inline picker deliberately cannot: losing a deal should be a decision, not
+   * a mis-click on a dropdown you were skimming past.
+   */
+  const allStageOptions = stages.map((s) => ({ id: s.id, name: s.name }));
 
   const stillOpen = new Set(openLedgerInvoices.map((r) => r.number));
   const columns = stages
@@ -173,7 +181,24 @@ export default async function DealsPage() {
                         </span>
                       </span>
                     )}
-                    {d.ownerName && <Avatar name={d.ownerName} className="size-[22px]" />}
+                    <span className="flex items-center gap-1">
+                      {d.ownerName && <Avatar name={d.ownerName} className="size-[22px]" />}
+                      <RecordActions
+                        kind="deal"
+                        id={d.id}
+                        name={d.name}
+                        companies={companyOptions}
+                        stages={allStageOptions}
+                        values={{
+                          name: d.name,
+                          companyId: d.companyId,
+                          amount: (d.amountCents / 100).toString(),
+                          closeDate: d.closeDate,
+                          stageId: d.stageId,
+                          ownerName: d.ownerName,
+                        }}
+                      />
+                    </span>
                   </div>
                 </Card>
               );

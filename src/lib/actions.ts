@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import {
@@ -14,6 +14,7 @@ import {
   deals,
   connections,
   pipelineStages,
+  syncedInvoices,
   workspaces,
 } from "@/db";
 import { runSync } from "@/lib/sync";
@@ -137,11 +138,24 @@ export async function createTask(formData: FormData): Promise<void> {
 }
 
 export async function completeTask(formData: FormData): Promise<void> {
+  const wsId = await workspaceId();
   const id = trimmed.min(1).parse(formData.get("taskId"));
   await db
     .update(activities)
     .set({ completedAt: new Date() })
-    .where(eq(activities.id, id));
+    .where(and(eq(activities.id, id), eq(activities.workspaceId, wsId)));
+  revalidatePath("/tasks");
+  revalidatePath("/dashboard");
+}
+
+/** Ticking a task off is one click, so un-ticking it must be too. */
+export async function reopenTask(formData: FormData): Promise<void> {
+  const wsId = await workspaceId();
+  const id = trimmed.min(1).parse(formData.get("taskId"));
+  await db
+    .update(activities)
+    .set({ completedAt: null })
+    .where(and(eq(activities.id, id), eq(activities.workspaceId, wsId)));
   revalidatePath("/tasks");
   revalidatePath("/dashboard");
 }
@@ -169,6 +183,7 @@ export async function logActivity(formData: FormData): Promise<void> {
 }
 
 export async function setDealStage(formData: FormData): Promise<void> {
+  const wsId = await workspaceId();
   const dealId = trimmed.min(1).parse(formData.get("dealId"));
   const stageId = trimmed.min(1).parse(formData.get("stageId"));
   const [stage] = await db
@@ -184,8 +199,217 @@ export async function setDealStage(formData: FormData): Promise<void> {
       wonAt: stage.kind === "won" ? new Date() : null,
       updatedAt: new Date(),
     })
-    .where(eq(deals.id, dealId));
+    .where(and(eq(deals.id, dealId), eq(deals.workspaceId, wsId)));
   revalidatePath("/deals");
+  revalidatePath("/dashboard");
+}
+
+/*
+ * Editing and deleting. Every one of these is scoped to the workspace as well
+ * as the id: the id arrives from a form and is therefore the caller's to
+ * choose, so matching on it alone would let a signed-in person edit a record
+ * belonging to a workspace they cannot see. There is one workspace today,
+ * which is exactly why the check has to go in now — the day there are two is
+ * not the day to remember it.
+ *
+ * Nothing cascades in the schema, so deletes detach their dependents by hand
+ * rather than failing on a foreign key. A record is let go of; the notes and
+ * deals that mentioned it are not.
+ */
+
+/** The row exists and belongs here, or the action says so instead of silently doing nothing. */
+function assertTouched(rows: unknown[], what: string): void {
+  if (rows.length === 0) throw new Error(`That ${what} is no longer here.`);
+}
+
+export async function updateCompany(formData: FormData): Promise<void> {
+  const wsId = await workspaceId();
+  const id = trimmed.min(1).parse(formData.get("id"));
+  const touched = await db
+    .update(companies)
+    .set({
+      name: trimmed.min(1, "Name is required.").parse(formData.get("name")),
+      domain: optionalText.parse(formData.get("domain") ?? ""),
+      city: optionalText.parse(formData.get("city") ?? ""),
+      industry: optionalText.parse(formData.get("industry") ?? ""),
+      lifecycleStage: trimmed.parse(formData.get("lifecycleStage") ?? "lead") || "lead",
+      ownerName: optionalText.parse(formData.get("ownerName") ?? ""),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(companies.id, id), eq(companies.workspaceId, wsId)))
+    .returning({ id: companies.id });
+  assertTouched(touched, "company");
+  revalidatePath("/companies");
+  revalidatePath(`/companies/${id}`);
+  revalidatePath("/contacts");
+}
+
+/*
+ * A company synced from the books comes back on the next sync — the books are
+ * the record, and Reach is a mirror. Deleting one is therefore a way to tidy
+ * the CRM today, not a way to remove a customer; the dialog says so.
+ */
+export async function deleteCompany(formData: FormData): Promise<void> {
+  const wsId = await workspaceId();
+  const id = trimmed.min(1).parse(formData.get("id"));
+  const [company] = await db
+    .select({ id: companies.id })
+    .from(companies)
+    .where(and(eq(companies.id, id), eq(companies.workspaceId, wsId)));
+  assertTouched(company ? [company] : [], "company");
+
+  await db.update(contacts).set({ companyId: null }).where(eq(contacts.companyId, id));
+  await db.update(deals).set({ companyId: null }).where(eq(deals.companyId, id));
+  await db.update(activities).set({ companyId: null }).where(eq(activities.companyId, id));
+  /* The invoice mirror is a cache keyed to the company; it has nowhere to go. */
+  await db.delete(syncedInvoices).where(eq(syncedInvoices.companyId, id));
+  await db.delete(companies).where(and(eq(companies.id, id), eq(companies.workspaceId, wsId)));
+
+  revalidatePath("/companies");
+  revalidatePath("/contacts");
+  revalidatePath("/deals");
+  revalidatePath("/dashboard");
+  redirect("/companies");
+}
+
+export async function updateContact(formData: FormData): Promise<void> {
+  const wsId = await workspaceId();
+  const id = trimmed.min(1).parse(formData.get("id"));
+  const companyId = optionalText.parse(formData.get("companyId") ?? "");
+  const touched = await db
+    .update(contacts)
+    .set({
+      firstName: trimmed.min(1, "First name is required.").parse(formData.get("firstName")),
+      lastName: trimmed.parse(formData.get("lastName") ?? "") || "—",
+      email: optionalText.parse(formData.get("email") ?? ""),
+      phone: optionalText.parse(formData.get("phone") ?? ""),
+      title: optionalText.parse(formData.get("title") ?? ""),
+      companyId: companyId || null,
+      lifecycleStage: trimmed.parse(formData.get("lifecycleStage") ?? "lead") || "lead",
+      ownerName: optionalText.parse(formData.get("ownerName") ?? ""),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(contacts.id, id), eq(contacts.workspaceId, wsId)))
+    .returning({ id: contacts.id });
+  assertTouched(touched, "contact");
+  revalidatePath("/contacts");
+  if (companyId) revalidatePath(`/companies/${companyId}`);
+}
+
+export async function deleteContact(formData: FormData): Promise<void> {
+  const wsId = await workspaceId();
+  const id = trimmed.min(1).parse(formData.get("id"));
+  const [contact] = await db
+    .select({ id: contacts.id, companyId: contacts.companyId })
+    .from(contacts)
+    .where(and(eq(contacts.id, id), eq(contacts.workspaceId, wsId)));
+  assertTouched(contact ? [contact] : [], "contact");
+
+  await db.update(deals).set({ contactId: null }).where(eq(deals.contactId, id));
+  await db.update(activities).set({ contactId: null }).where(eq(activities.contactId, id));
+  await db.delete(contacts).where(and(eq(contacts.id, id), eq(contacts.workspaceId, wsId)));
+
+  revalidatePath("/contacts");
+  if (contact.companyId) revalidatePath(`/companies/${contact.companyId}`);
+}
+
+export async function updateDeal(formData: FormData): Promise<void> {
+  const wsId = await workspaceId();
+  const id = trimmed.min(1).parse(formData.get("id"));
+  const [existing] = await db
+    .select({ id: deals.id, wonAt: deals.wonAt })
+    .from(deals)
+    .where(and(eq(deals.id, id), eq(deals.workspaceId, wsId)));
+  assertTouched(existing ? [existing] : [], "deal");
+
+  const stageId = trimmed.min(1, "Pick a stage.").parse(formData.get("stageId"));
+  const [stage] = await db
+    .select()
+    .from(pipelineStages)
+    .where(eq(pipelineStages.id, stageId));
+  if (!stage) throw new Error("Unknown stage.");
+  const companyId = optionalText.parse(formData.get("companyId") ?? "");
+
+  await db
+    .update(deals)
+    .set({
+      name: trimmed.min(1, "Deal name is required.").parse(formData.get("name")),
+      pipelineId: stage.pipelineId,
+      stageId,
+      companyId: companyId || null,
+      amountCents: toCents(formData.get("amount")),
+      closeDate: optionalText.parse(formData.get("closeDate") ?? ""),
+      ownerName: optionalText.parse(formData.get("ownerName") ?? ""),
+      status: stage.kind === "won" ? "won" : stage.kind === "lost" ? "lost" : "open",
+      /* Editing a deal that was already won must not restamp the day it was won. */
+      wonAt: stage.kind === "won" ? (existing.wonAt ?? new Date()) : null,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(deals.id, id), eq(deals.workspaceId, wsId)));
+
+  revalidatePath("/deals");
+  revalidatePath("/dashboard");
+  if (companyId) revalidatePath(`/companies/${companyId}`);
+}
+
+export async function deleteDeal(formData: FormData): Promise<void> {
+  const wsId = await workspaceId();
+  const id = trimmed.min(1).parse(formData.get("id"));
+  const [deal] = await db
+    .select({ id: deals.id, companyId: deals.companyId })
+    .from(deals)
+    .where(and(eq(deals.id, id), eq(deals.workspaceId, wsId)));
+  assertTouched(deal ? [deal] : [], "deal");
+
+  await db.update(activities).set({ dealId: null }).where(eq(activities.dealId, id));
+  await db.delete(deals).where(and(eq(deals.id, id), eq(deals.workspaceId, wsId)));
+
+  revalidatePath("/deals");
+  revalidatePath("/dashboard");
+  if (deal.companyId) revalidatePath(`/companies/${deal.companyId}`);
+}
+
+export async function updateTask(formData: FormData): Promise<void> {
+  const wsId = await workspaceId();
+  const id = trimmed.min(1).parse(formData.get("id"));
+  const dueRaw = optionalText.parse(formData.get("dueAt") ?? "");
+  const companyId = optionalText.parse(formData.get("companyId") ?? "");
+  const touched = await db
+    .update(activities)
+    .set({
+      subject: trimmed.min(1, "The task needs a description.").parse(formData.get("subject")),
+      dueAt: dueRaw ? new Date(dueRaw) : null,
+      companyId: companyId || null,
+      actorName: optionalText.parse(formData.get("ownerName") ?? ""),
+    })
+    .where(
+      and(
+        eq(activities.id, id),
+        eq(activities.workspaceId, wsId),
+        eq(activities.type, "task"),
+      ),
+    )
+    .returning({ id: activities.id });
+  assertTouched(touched, "task");
+  revalidatePath("/tasks");
+  revalidatePath("/dashboard");
+}
+
+export async function deleteTask(formData: FormData): Promise<void> {
+  const wsId = await workspaceId();
+  const id = trimmed.min(1).parse(formData.get("id"));
+  const touched = await db
+    .delete(activities)
+    .where(
+      and(
+        eq(activities.id, id),
+        eq(activities.workspaceId, wsId),
+        eq(activities.type, "task"),
+      ),
+    )
+    .returning({ id: activities.id });
+  assertTouched(touched, "task");
+  revalidatePath("/tasks");
   revalidatePath("/dashboard");
 }
 

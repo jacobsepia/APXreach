@@ -4,6 +4,7 @@ import { companies, contacts, db } from "@/db";
 import { money, relativeDay } from "@/lib/format";
 import { Avatar, Card, LedgerDot, Pill, StagePill } from "@/components/ui";
 import { QuickCreate } from "@/components/quick-create";
+import { RecordActions } from "@/components/record-actions";
 import { Download } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -18,10 +19,12 @@ export default async function ContactsPage() {
         firstName: contacts.firstName,
         lastName: contacts.lastName,
         email: contacts.email,
+        phone: contacts.phone,
+        title: contacts.title,
         lifecycleStage: contacts.lifecycleStage,
         ownerName: contacts.ownerName,
         lastActivityAt: contacts.lastActivityAt,
-        companyId: companies.id,
+        companyId: contacts.companyId,
         companyName: companies.name,
         arBalanceCents: companies.arBalanceCents,
         overdueCents: companies.overdueCents,
@@ -91,7 +94,7 @@ export default async function ContactsPage() {
       </div>
 
       <Card index={0} className="overflow-hidden">
-        <div className="grid h-10 grid-cols-[220px_200px_minmax(0,1fr)_120px_70px_110px_110px] items-center gap-3 border-b border-border bg-[image:var(--gradient-table-head)] px-4 text-[11px] font-semibold tracking-[0.05em] text-[var(--text-tertiary)] uppercase">
+        <div className="grid h-10 grid-cols-[220px_180px_minmax(0,1fr)_110px_60px_100px_100px_68px] items-center gap-3 border-b border-border bg-[image:var(--gradient-table-head)] px-4 text-[11px] font-semibold tracking-[0.05em] text-[var(--text-tertiary)] uppercase">
           <span>Name</span>
           <span>Company</span>
           <span>Email</span>
@@ -99,11 +102,12 @@ export default async function ContactsPage() {
           <span>Owner</span>
           <span className="text-right">Owing</span>
           <span className="text-right">Last activity</span>
+          <span className="sr-only">Actions</span>
         </div>
         {rows.map((row, i) => (
           <div
             key={row.id}
-            className={`transition-colors hover:bg-[var(--tint)] grid h-[46px] grid-cols-[220px_200px_minmax(0,1fr)_120px_70px_110px_110px] items-center gap-3 px-4 text-[13px] ${i < rows.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
+            className={`transition-colors hover:bg-[var(--tint)] grid h-[46px] grid-cols-[220px_180px_minmax(0,1fr)_110px_60px_100px_100px_68px] items-center gap-3 px-4 text-[13px] ${i < rows.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
           >
             <span className="flex min-w-0 items-center gap-2.5">
               <Avatar name={`${row.firstName} ${row.lastName}`} />
@@ -142,6 +146,22 @@ export default async function ContactsPage() {
             <span className="text-right text-[var(--text-tertiary)]">
               {relativeDay(row.lastActivityAt)}
             </span>
+            <RecordActions
+              kind="contact"
+              id={row.id}
+              name={`${row.firstName} ${row.lastName}`.trim()}
+              companies={companyOptions}
+              values={{
+                firstName: row.firstName,
+                lastName: row.lastName,
+                email: row.email,
+                phone: row.phone,
+                title: row.title,
+                companyId: row.companyId,
+                lifecycleStage: row.lifecycleStage,
+                ownerName: row.ownerName,
+              }}
+            />
           </div>
         ))}
         <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-[var(--text-tertiary)]">

@@ -14,6 +14,7 @@ import {
 import { daysBetween, money, monthYear, shortDate } from "@/lib/format";
 import { Avatar, Card, Caps, LedgerDot, Pill } from "@/components/ui";
 import { TimelineComposer } from "@/components/timeline-composer";
+import { RecordActions } from "@/components/record-actions";
 import {
   AlertTriangle,
   Banknote,
@@ -168,6 +169,20 @@ export default async function CompanyPage({
             <Plus className="size-3.5" />
             <span>New deal</span>
           </button>
+          <RecordActions
+            kind="company"
+            id={company.id}
+            name={company.name}
+            variant="buttons"
+            values={{
+              name: company.name,
+              domain: company.domain,
+              city: company.city,
+              industry: company.industry,
+              lifecycleStage: company.lifecycleStage,
+              ownerName: company.ownerName,
+            }}
+          />
         </div>
       </div>
 
