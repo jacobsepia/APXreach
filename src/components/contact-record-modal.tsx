@@ -3,287 +3,264 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ArrowDownLeft, ArrowUpRight, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, Clock3, FileText, Inbox, LoaderCircle, Mail, MessageSquareText, Phone, Search, Send, StickyNote, UserRound, X } from "lucide-react";
 import { loadContactRecord } from "@/lib/contact-record";
-import {
-  Building2,
-  CalendarDays,
-  CheckCircle2,
-  ChevronRight,
-  Clock3,
-  Mail,
-  MessageSquareText,
-  Phone,
-  StickyNote,
-  Users,
-  X,
-} from "lucide-react";
+import { sendEmailFromRecord } from "@/lib/actions";
 import { money, relativeDay, shortDate } from "@/lib/format";
-import { Avatar, LedgerDot, StagePill } from "@/components/ui";
+import { StagePill } from "@/components/ui";
+import styles from "./contact-record-modal.module.css";
 
 type ContactRecord = {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string | null;
-  phone: string | null;
-  title: string | null;
-  lifecycleStage: string;
-  ownerName: string | null;
-  lastActivityAt: Date | null;
-  createdAt: Date;
-  companyId: string | null;
-  companyName: string | null;
-  arBalanceCents: number | null;
-  overdueCents: number | null;
+  id: string; firstName: string; lastName: string; email: string | null;
+  phone: string | null; title: string | null; lifecycleStage: string;
+  ownerName: string | null; lastActivityAt: Date | null; createdAt: Date;
+  companyId: string | null; companyName: string | null;
+  arBalanceCents: number | null; overdueCents: number | null;
 };
+type RecordData = Awaited<ReturnType<typeof loadContactRecord>>;
+type Message = RecordData["messages"][number];
+type View = "activity" | "emails" | "overview" | "compose";
 
-type Activity = {
-  id: string;
-  type: string;
-  subject: string;
-  body: string | null;
-  actorName: string | null;
-  occurredAt: Date;
-  completedAt: Date | null;
-};
+function stamp(date: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+  }).format(new Date(date));
+}
 
-type Deal = {
-  id: string;
-  name: string;
-  amountCents: number;
-  closeDate: string | null;
-  status: string;
-  stageName: string;
-};
-
-const activityIcons = {
-  email: Mail,
-  call: Phone,
-  meeting: Users,
-  task: CheckCircle2,
-  note: StickyNote,
-} as const;
-
-function ActivityIcon({ type }: { type: string }) {
-  const Icon = activityIcons[type as keyof typeof activityIcons] ?? MessageSquareText;
+function MessageCard({ message }: { message: Message }) {
+  const outbound = message.direction === "outbound";
   return (
-    <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-white">
-      <Icon className="size-3.5 text-[var(--accent-primary)]" />
-    </span>
+    <details className={styles.message} open>
+      <summary className={styles.messageSummary}>
+        <span className={outbound ? styles.sentIcon : styles.receivedIcon}>{outbound ? <ArrowUpRight size={18} /> : <ArrowDownLeft size={18} />}</span>
+        <span className={styles.messageTitle}>
+          <span className={styles.messageMeta}>{outbound ? "Sent email" : "Received email"} <span>· {stamp(message.sentAt)}</span></span>
+          <strong>{message.subject || "(No subject)"}</strong>
+        </span>
+        <ChevronDown size={17} className={styles.chevron} />
+      </summary>
+      <div className={styles.messageContent}>
+        <dl className={styles.envelope}>
+          <dt>From</dt><dd>{message.fromAddress}</dd>
+          <dt>To</dt><dd>{message.toAddress}</dd>
+        </dl>
+        <div className={styles.emailBody}>{message.bodyText || "No plain-text message content is available."}</div>
+        <div className={styles.messageFoot}><CheckCircle2 size={13} /> {outbound ? "Sent through your connected mailbox" : "Received in your connected mailbox"}</div>
+      </div>
+    </details>
   );
 }
 
-function Property({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-[112px_minmax(0,1fr)] gap-3 py-2.5 text-[13px]">
-      <span className="text-[var(--text-tertiary)]">{label}</span>
-      <span className="min-w-0 break-words [overflow-wrap:anywhere] font-medium text-foreground">{children}</span>
-    </div>
-  );
-}
-
-export function ContactRecordModal({
-  contact,
-  children,
-}: {
-  contact: ContactRecord;
-  children: React.ReactNode;
-}) {
+export function ContactRecordModal({ contact, children }: { contact: ContactRecord; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"activity" | "about">("activity");
-  const [data, setData] = useState<{ activities: Activity[]; deals: Deal[] } | null>(null);
+  const [view, setView] = useState<View>("activity");
+  const [data, setData] = useState<RecordData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [query, setQuery] = useState("");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [confirmClose, setConfirmClose] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const activities = data?.activities ?? [];
-  const deals = data?.deals ?? [];
-  const name = `${contact.firstName} ${contact.lastName}`;
+  const sendingRef = useRef(false);
+  const name = (contact.firstName + " " + contact.lastName).trim();
+  const initials = [contact.firstName, contact.lastName].filter(Boolean).map((part) => part[0]).join("").toUpperCase();
+  const dirty = Boolean(subject.trim() || body.trim());
+
+  const requestClose = () => {
+    if (sendingRef.current) return;
+    if (dirty) { setConfirmClose(true); return; }
+    setOpen(false);
+  };
+  const compose = () => { setView("compose"); setSendError(null); setNotice(null); };
+  const refresh = () => setAttempt((value) => value + 1);
 
   useEffect(() => {
     if (!open) return;
     dialogRef.current?.showModal();
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      triggerRef.current?.focus();
-    };
+    return () => { document.body.style.overflow = previousOverflow; triggerRef.current?.focus(); };
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
     let active = true;
     setError(null);
-    setData(null);
+    setLoading(true);
     const timeout = window.setTimeout(() => {
-      if (active) {
-        active = false;
-        setError("History is taking too long to load. Please retry.");
-      }
+      if (active) { active = false; setLoading(false); setError("This record is taking longer to load. Please retry."); }
     }, 15000);
     loadContactRecord(contact.id).then((result) => {
-      if (active) setData(result);
+      if (active) { setData(result); setLoading(false); }
     }).catch(() => {
-      if (active) setError("We couldn't load this contact's history. Please retry.");
+      if (active) { setLoading(false); setError("We couldn't refresh this contact's history. Please retry."); }
     }).finally(() => window.clearTimeout(timeout));
     return () => { active = false; window.clearTimeout(timeout); };
   }, [open, contact.id, attempt]);
 
+  const send = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (sendingRef.current || !data?.mailbox || !contact.email) return;
+    sendingRef.current = true;
+    setSending(true);
+    setSendError(null);
+    const form = new FormData();
+    form.set("contactId", contact.id);
+    if (contact.companyId) form.set("companyId", contact.companyId);
+    form.set("to", contact.email);
+    form.set("subject", subject);
+    form.set("body", body);
+    try {
+      await sendEmailFromRecord(form);
+      setSubject(""); setBody(""); setQuery("");
+      setView("emails");
+      setNotice("Email sent from " + data.mailbox.emailAddress + ".");
+      refresh();
+    } catch (caught) {
+      setSendError(caught instanceof Error ? caught.message : "That email couldn't be sent. Your draft has been kept.");
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+  };
+
+  const messages = data?.messages ?? [];
+  const activities = data?.activities ?? [];
+  const deals = data?.deals ?? [];
+  const search = query.trim().toLowerCase();
+  const visibleMessages = messages.filter((message) => [message.subject, message.bodyText, message.fromAddress, message.toAddress].join(" ").toLowerCase().includes(search));
+  const visibleActivities = activities.filter((activity) => [activity.subject, activity.body, activity.actorName, activity.type].join(" ").toLowerCase().includes(search));
+  const openDeals = deals.filter((deal) => deal.status === "open");
+
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen(true)}
-        className="group flex min-w-0 items-center gap-2.5 text-left"
-        aria-haspopup="dialog"
-        aria-label={`Open ${name}'s contact record`}
-      >
-        {children}
-      </button>
-
+      <button ref={triggerRef} type="button" onClick={() => { setView("activity"); setData(null); setQuery(""); setNotice(null); setOpen(true); }} className={styles.trigger} aria-haspopup="dialog" aria-label={"Open " + name + "'s contact record"}>{children}</button>
       {open && createPortal(
-        <dialog
-          ref={dialogRef}
-          aria-label={`${name}'s contact record`}
-          onCancel={() => setOpen(false)}
-          onClose={() => setOpen(false)}
-          className="fixed inset-0 m-0 flex h-dvh max-h-none w-screen max-w-none justify-end border-0 bg-transparent p-3 text-foreground backdrop:bg-[rgba(21,24,28,0.32)] sm:p-5"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setOpen(false);
-          }}
-        >
-          <section
-            className="flex h-full w-full max-w-[1020px] flex-col overflow-hidden rounded-2xl border border-[rgba(21,24,28,0.1)] bg-[#f8faf8] shadow-[0_24px_72px_rgba(16,24,40,0.26)]"
-          >
-            <header className="border-b border-border bg-white px-5 py-4 sm:px-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex min-w-0 items-center gap-3.5">
-                  <Avatar name={name} className="size-11 text-sm" />
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-display text-[22px] font-bold tracking-[-0.03em] text-foreground">{name}</h2>
-                      <StagePill stage={contact.lifecycleStage} />
-                    </div>
-                    <p className="mt-0.5 truncate text-[13px] text-[var(--text-tertiary)]">
-                      {[contact.title, contact.companyName].filter(Boolean).join(" · ") || "Contact record"}
-                    </p>
-                  </div>
+        <dialog ref={dialogRef} aria-label={name + "'s contact record"} onCancel={(event) => { event.preventDefault(); requestClose(); }} className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) requestClose(); }}>
+          <section className={styles.shell}>
+            <header className={styles.header}>
+              <div className={styles.identity}>
+                <div className={styles.avatar}>{initials}<span /></div>
+                <div className={styles.identityText}>
+                  <div className={styles.eyebrow}>CONTACT RECORD <span> / </span> APX REACH</div>
+                  <div className={styles.nameLine}><h2>{name}</h2><StagePill stage={contact.lifecycleStage} /></div>
+                  <p>{[contact.title, contact.companyName].filter(Boolean).join(" at ") || "Your relationship, in one place."}</p>
                 </div>
-                <button
-                  autoFocus
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  aria-label="Close contact record"
-                  className="flex size-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:bg-[var(--tint)] hover:text-foreground"
-                >
-                  <X className="size-4" />
-                </button>
               </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {contact.email && (
-                  <a href={`mailto:${contact.email}`} className="flex h-8 items-center gap-1.5 rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-foreground hover:bg-[var(--tint)]">
-                    <Mail className="size-3.5" /> Email
-                  </a>
-                )}
-                {contact.phone && (
-                  <a href={`tel:${contact.phone}`} className="flex h-8 items-center gap-1.5 rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-foreground hover:bg-[var(--tint)]">
-                    <Phone className="size-3.5" /> Call
-                  </a>
-                )}
-                <button type="button" onClick={() => setTab("activity")} className="flex h-8 items-center gap-1.5 rounded-[10px] bg-[image:var(--gradient-cta)] px-3 text-[13px] font-medium text-white">
-                  <MessageSquareText className="size-3.5" /> Activity
-                </button>
+              <div className={styles.headerActions}>
+                <button type="button" className={styles.primaryButton} onClick={compose} disabled={!contact.email || sending}><Mail size={16} /><span>Write email</span></button>
+                <button autoFocus type="button" onClick={requestClose} disabled={sending} aria-label="Close contact record" className={styles.closeButton}><X size={20} /></button>
               </div>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
-              {!data && !error && <p role="status" className="mb-4 text-sm text-muted-foreground">Loading activity and deals…</p>}
-              {error && <div role="alert" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">{error} <button type="button" onClick={() => setAttempt((value) => value + 1)} className="ml-2 font-semibold underline">Retry</button></div>}
-              <div className="grid items-start gap-4 lg:grid-cols-[260px_minmax(0,1fr)_265px]">
-                <aside className="flex flex-col gap-3.5">
-                  <div className="rounded-xl border border-border bg-white px-4 py-3.5 shadow-[var(--edge-top)]">
-                    <div className="text-[11px] font-semibold tracking-[0.06em] text-[var(--text-tertiary)] uppercase">About this contact</div>
-                    <div className="mt-1 divide-y divide-[var(--rule-soft)]">
-                      <Property label="Email">{contact.email ? <a className="text-[var(--accent-primary)] hover:underline" href={`mailto:${contact.email}`}>{contact.email}</a> : "—"}</Property>
-                      <Property label="Phone">{contact.phone ? <a className="text-[var(--accent-primary)] hover:underline" href={`tel:${contact.phone}`}>{contact.phone}</a> : "—"}</Property>
-                      <Property label="Job title">{contact.title ?? "—"}</Property>
-                      <Property label="Owner">{contact.ownerName ?? "Unassigned"}</Property>
-                      <Property label="Created">{shortDate(contact.createdAt)}</Property>
-                    </div>
-                  </div>
+            {confirmClose && <div className={styles.discardBar} role="alert">
+              <span>You have an unsent draft. Discard it and close?</span>
+              <button type="button" className={styles.secondaryButton} onClick={() => { setConfirmClose(false); setView("compose"); }}>Keep writing</button>
+              <button type="button" className={styles.textButton} onClick={() => { setSubject(""); setBody(""); setConfirmClose(false); setOpen(false); }}>Discard draft</button>
+            </div>}
 
-                  <div className="rounded-xl border border-border bg-white px-4 py-3.5 shadow-[var(--edge-top)]">
-                    <div className="flex items-center justify-between text-[11px] font-semibold tracking-[0.06em] text-[var(--text-tertiary)] uppercase">
-                      <span>Company</span><Building2 className="size-3.5" />
-                    </div>
-                    {contact.companyId ? (
-                      <Link href={`/companies/${contact.companyId}`} className="mt-3 flex items-center gap-2.5 rounded-lg p-1 -m-1 hover:bg-[var(--tint)]">
-                        <span className="flex size-8 items-center justify-center rounded-lg bg-[var(--accent-plum-200)] text-xs font-semibold text-[var(--accent-primary)]">{contact.companyName?.slice(0, 1)}</span>
-                        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground">{contact.companyName}</span>
-                        <ChevronRight className="size-3.5 text-[var(--text-tertiary)]" />
-                      </Link>
-                    ) : <p className="mt-2 text-[13px] text-[var(--text-tertiary)]">No company associated.</p>}
-                  </div>
-                </aside>
-
-                <section aria-label="Contact activity and overview" className="rounded-xl border border-border bg-white shadow-[var(--edge-top)]">
-                  <div className="flex items-center gap-5 border-b border-border px-4 pt-3">
-                    {(["activity", "about"] as const).map((value) => (
-                      <button key={value} type="button" onClick={() => setTab(value)} className={`border-b-2 px-0.5 pb-3 text-[13px] font-medium capitalize ${tab === value ? "border-[var(--accent-primary)] text-foreground" : "border-transparent text-[var(--text-tertiary)] hover:text-foreground"}`}>
-                        {value === "activity" ? "Activities" : "Overview"}
-                      </button>
-                    ))}
-                  </div>
-                  {tab === "activity" ? (
-                    <div className="p-4">
-                      <div className="mb-3 flex items-center gap-2 text-[12px] text-[var(--text-tertiary)]"><Clock3 className="size-3.5" /> Recent interactions{activities.length === 100 ? " · Latest 100" : ""}</div>
-                      <div className="flex flex-col">
-                        {activities.map((activity, index) => (
-                          <div key={activity.id} className={`flex gap-3 py-3 ${index < activities.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}>
-                            <ActivityIcon type={activity.type} />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-[13px] text-foreground"><strong className="font-semibold">{activity.subject}</strong>{activity.body ? ` — ${activity.body}` : ""}</p>
-                              <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">{activity.actorName ?? "Reach"} · {relativeDay(activity.occurredAt)}</p>
-                            </div>
-                          </div>
-                        ))}
-                        {data && activities.length === 0 && <p className="py-8 text-center text-[13px] text-[var(--text-tertiary)]">No activity logged for this contact yet.</p>}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-4">
-                      <p className="mb-4 text-[12px] text-[var(--text-tertiary)]">Contact status and account context</p>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-lg bg-[var(--tint)] p-3"><div className="text-[11px] text-[var(--text-tertiary)]">Lifecycle stage</div><div className="mt-1"><StagePill stage={contact.lifecycleStage} /></div></div>
-                        <div className="rounded-lg bg-[var(--tint)] p-3"><div className="text-[11px] text-[var(--text-tertiary)]">Last activity</div><div className="mt-1 text-[13px] font-semibold text-foreground">{relativeDay(contact.lastActivityAt)}</div></div>
-                        <div className="rounded-lg bg-[var(--tint)] p-3"><div className="text-[11px] text-[var(--text-tertiary)]">Associated company</div><div className="mt-1 text-[13px] font-semibold text-foreground">{contact.companyName ?? "—"}</div></div>
-                        <div className="rounded-lg bg-[var(--tint)] p-3"><div className="text-[11px] text-[var(--text-tertiary)]">Open deals</div><div className="mt-1 text-[13px] font-semibold text-foreground">{data ? deals.filter((deal) => deal.status === "open").length : "—"}</div></div>
-                      </div>
-                    </div>
-                  )}
+            <div className={styles.workspace}>
+              <aside className={styles.sidebar}>
+                <section className={styles.profileSection}>
+                  <h3><UserRound size={15} /> Contact details</h3>
+                  <div className={styles.property}><span>Email address</span>{contact.email ? <button type="button" onClick={compose} className={styles.emailLink} disabled={sending}>{contact.email}<ArrowUpRight size={13} /></button> : <strong>Not provided</strong>}</div>
+                  <div className={styles.property}><span>Phone number</span>{contact.phone ? <a href={"tel:" + contact.phone}>{contact.phone}</a> : <strong>Not provided</strong>}</div>
+                  <div className={styles.property}><span>Job title</span><strong>{contact.title || "Not provided"}</strong></div>
+                  <div className={styles.owner}><span className={styles.ownerAvatar}><UserRound size={15} /></span><div><span>Contact owner</span><strong>{contact.ownerName || "Unassigned"}</strong></div></div>
                 </section>
 
-                <aside className="flex flex-col gap-3.5">
-                  <div className="rounded-xl border border-border bg-white px-4 py-3.5 shadow-[var(--edge-top)]">
-                    <div className="flex items-center justify-between"><span className="text-[11px] font-semibold tracking-[0.06em] text-[var(--text-tertiary)] uppercase">Deals</span><span className="text-xs text-[var(--text-tertiary)]">{data ? deals.length : "—"}</span></div>
-                    <div className="mt-2 divide-y divide-[var(--rule-soft)]">
-                      {deals.map((deal) => <div key={deal.id} className="py-2.5"><div className="text-[13px] font-semibold text-foreground">{deal.name}</div><div className="mt-1 flex items-center justify-between gap-2 text-xs text-[var(--text-tertiary)]"><span className="truncate">{deal.stageName} · {shortDate(deal.closeDate)}</span><span className="shrink-0 font-semibold text-foreground">{money(deal.amountCents)}</span></div></div>)}
-                      {data && deals.length === 0 && <p className="py-2 text-[13px] text-[var(--text-tertiary)]">No deals associated.</p>}
-                    </div>
-                  </div>
-                  {contact.lifecycleStage === "customer" && contact.arBalanceCents !== null && (
-                    <div className="rounded-xl border border-[color-mix(in_srgb,var(--accent-data)_40%,transparent)] bg-white px-4 py-3.5 shadow-[var(--edge-top)]">
-                      <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.06em] text-[var(--text-tertiary)] uppercase">The books <LedgerDot /></div>
-                      <div className="mt-3 grid grid-cols-2 gap-3"><div><div className="text-[11px] text-[var(--text-tertiary)]">Outstanding</div><div className="mt-0.5 font-display text-lg font-semibold text-foreground">{money(contact.arBalanceCents)}</div></div><div><div className="text-[11px] text-[var(--text-tertiary)]">Overdue</div><div className={`mt-0.5 font-display text-lg font-semibold ${Number(contact.overdueCents) > 0 ? "text-[#b91c1c]" : "text-foreground"}`}>{money(contact.overdueCents ?? 0)}</div></div></div>
-                    </div>
+                <section className={styles.profileSection}>
+                  <h3><Building2 size={15} /> Associated company</h3>
+                  {contact.companyId ? <Link href={"/companies/" + contact.companyId} className={styles.companyCard}>
+                    <span className={styles.companyIcon}><Building2 size={20} /></span><strong>{contact.companyName}</strong><ArrowUpRight size={15} />
+                  </Link> : <p className={styles.muted}>No company associated.</p>}
+                </section>
+
+                {contact.lifecycleStage === "customer" && contact.arBalanceCents !== null && <section className={styles.booksCard}>
+                  <div className={styles.booksLabel}><span /> CONNECTED BOOKS</div>
+                  <span className={styles.muted}>Company outstanding</span>
+                  <strong className={styles.balance}>{money(contact.arBalanceCents)}</strong>
+                  <div className={styles.overdue}><span>Overdue</span><strong className={Number(contact.overdueCents) > 0 ? styles.warning : ""}>{money(contact.overdueCents ?? 0)}</strong></div>
+                </section>}
+                <div className={styles.recordDates}><CalendarDays size={14} /> Added {new Intl.DateTimeFormat("en-CA", { month: "short", day: "numeric", year: "numeric" }).format(new Date(contact.createdAt))}</div>
+              </aside>
+
+              <div className={styles.main}>
+                <nav className={styles.tabs} aria-label="Contact views">
+                  {([{ id: "activity", label: "Activity", icon: Clock3 }, { id: "emails", label: "Emails", icon: Mail }, { id: "overview", label: "Overview", icon: FileText }] as const).map(({ id, label, icon: Icon }) =>
+                    <button key={id} type="button" aria-current={view === id ? "page" : undefined} className={view === id ? styles.activeTab : styles.tab} onClick={() => { if (!sending) { setView(id); setQuery(""); } }} disabled={sending}><Icon size={16} />{label}{id === "emails" && data && <span className={styles.count}>{messages.length === 100 ? "100+" : messages.length}</span>}</button>
                   )}
-                </aside>
+                  {view === "compose" && <span className={styles.composeTab}><Send size={15} />Compose</span>}
+                  <span className={styles.mailboxStatus}>{data?.mailbox && <><span />Mailbox connected</>}</span>
+                </nav>
+
+                <div className={styles.content}>
+                  {notice && <div role="status" className={styles.success}><CheckCircle2 size={17} />{notice}</div>}
+                  {error && <div role="alert" className={styles.error}>{error}<button type="button" onClick={refresh}>Retry</button></div>}
+                  {loading && <div role="status" className={styles.loading}><LoaderCircle size={16} className={styles.spin} />{data ? "Refreshing history…" : "Loading your contact's history…"}</div>}
+
+                  {view === "compose" ? (
+                    <section className={styles.compose}>
+                      <button type="button" className={styles.backButton} onClick={() => setView("emails")} disabled={sending}><ChevronLeft size={15} />Back to emails</button>
+                      <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>KEEP THE CONVERSATION GOING</span><h3>Write an email</h3><p>Send directly to {contact.firstName} from your connected mailbox.</p></div><span className={styles.headingIcon}><Send size={24} /></span></div>
+                      {!data ? (!loading && !error && <p className={styles.muted}>Load the contact to check your mailbox.</p>) : !data.mailbox ? <div className={styles.empty}><Mail size={30} /><h4>Connect your mailbox</h4><p>A connected mailbox is needed to send from Reach.</p><Link href="/settings" className={styles.primaryButton}>Open Settings</Link></div> : !contact.email ? <div className={styles.empty}><h4>No email address yet</h4><p>Add an email address using the contact's edit control.</p></div> : (
+                        <form onSubmit={send} className={styles.composeForm}>
+                          <div className={styles.composeEnvelope}>
+                            <div><span>From</span><strong>{data.mailbox.emailAddress}</strong><span className={styles.provider}>{data.mailbox.providerLabel}</span></div>
+                            <div><span>To</span><strong>{name} &lt;{contact.email}&gt;</strong></div>
+                          </div>
+                          <label className={styles.subjectField}><span>Subject</span><input name="subject" aria-label="Subject" placeholder="Give your email a subject" value={subject} onChange={(event) => setSubject(event.target.value)} required disabled={sending} maxLength={998} autoFocus /></label>
+                          <label className={styles.bodyField}><span className={styles.srOnly}>Message</span><textarea name="body" aria-label="Message" placeholder={"Hi " + contact.firstName + ",\n\n"} value={body} onChange={(event) => setBody(event.target.value)} required disabled={sending} rows={11} /></label>
+                          {sendError && <div role="alert" className={styles.error}>{sendError}</div>}
+                          <div className={styles.composeFooter}><span><CheckCircle2 size={14} />Saved to this contact's history after sending</span><button type="submit" disabled={sending || !subject.trim() || !body.trim()} className={styles.primaryButton}>{sending ? <LoaderCircle size={16} className={styles.spin} /> : <Send size={16} />}{sending ? "Sending…" : "Send email"}</button></div>
+                        </form>
+                      )}
+                    </section>
+                  ) : view === "overview" ? (
+                    <>
+                      <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>THE BIG PICTURE</span><h3>Relationship overview</h3><p>Key details and opportunities, all together.</p></div></div>
+                      <div className={styles.metrics}>
+                        <div><Clock3 size={18} /><span>Last interaction</span><strong>{relativeDay(contact.lastActivityAt)}</strong></div>
+                        <div><Mail size={18} /><span>Recorded emails</span><strong>{data ? (messages.length === 100 ? "100+" : messages.length) : "—"}</strong></div>
+                        <div><Building2 size={18} /><span>Open opportunities</span><strong>{data ? openDeals.length : "—"}</strong></div>
+                      </div>
+                      <div className={styles.sectionHeading}><div><h4>Associated deals</h4><p>Opportunities linked to this contact.</p></div></div>
+                      {deals.map((deal) => <article key={deal.id} className={styles.deal}><span className={styles.headingIcon}><FileText size={20} /></span><div><strong>{deal.name}</strong><p>{deal.stageName} · {shortDate(deal.closeDate)}</p></div><strong>{money(deal.amountCents)}</strong></article>)}
+                      {data && !deals.length && <div className={styles.empty}><FileText size={30} /><h4>No deals linked yet</h4><p>Associated opportunities will appear here.</p></div>}
+                    </>
+                  ) : (
+                    <>
+                      <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>{view === "emails" ? "EVERY MESSAGE, IN CONTEXT" : "YOUR RELATIONSHIP TIMELINE"}</span><h3>{view === "emails" ? "Email history" : "Recent activity"}</h3><p>{view === "emails" ? "Read complete messages, including who sent them and when." : "Conversations, notes, and touchpoints with " + contact.firstName + "."}</p></div><span className={styles.headingIcon}>{view === "emails" ? <Inbox size={24} /> : <MessageSquareText size={24} />}</span></div>
+                      <div className={styles.historyTools}><label className={styles.search}><Search size={16} /><input aria-label={view === "emails" ? "Search email history" : "Search activity"} placeholder={view === "emails" ? "Search subjects, messages, or addresses" : "Search this timeline"} value={query} onChange={(event) => setQuery(event.target.value)} /></label><span>{view === "emails" ? visibleMessages.length : visibleActivities.length} {view === "emails" ? "messages" : "activities"}{(view === "emails" ? messages.length : activities.length) === 100 ? " · Latest 100" : ""}</span></div>
+                      {view === "emails" ? (
+                        <div className={styles.messageList}>{visibleMessages.map((message) => <MessageCard key={message.id} message={message} />)}
+                          {data && !visibleMessages.length && <div className={styles.empty}><Inbox size={32} /><h4>{search ? "No matching messages" : "Start a conversation"}</h4><p>{search ? "Try another subject, address, or phrase." : "Emails recorded through Reach will appear here in full."}</p>{!search && contact.email && <button type="button" onClick={compose} className={styles.primaryButton}><Mail size={15} />Write an email</button>}</div>}
+                        </div>
+                      ) : (
+                        <div className={styles.timeline}>
+                          {visibleActivities.map((activity) => <article key={activity.id} className={styles.activity}>
+                            <span className={styles.timelineIcon}>{activity.type === "email" ? <Mail size={17} /> : activity.type === "call" ? <Phone size={17} /> : <StickyNote size={17} />}</span>
+                            <div className={styles.activityCard}><div className={styles.activityMeta}><span>{activity.type.replaceAll("_", " ")}</span><time dateTime={new Date(activity.occurredAt).toISOString()}>{stamp(activity.occurredAt)}</time></div><h4>{activity.subject}</h4>
+                              <p className={styles.activityPreview}>{activity.body || "No additional details."}</p>
+                              {activity.body && <details className={styles.activityDetails}><summary>Read full {activity.type === "email" ? "message" : "details"}<ChevronDown size={14} /></summary><div className={styles.emailBody}>{activity.body}</div></details>}
+                              <div className={styles.activityFooter}><span><UserRound size={13} />{activity.actorName || "Reach"}</span>{activity.type === "email" && <button type="button" onClick={() => { setView("emails"); setQuery(""); }}>View email history<ArrowUpRight size={13} /></button>}</div>
+                            </div>
+                          </article>)}
+                          {data && !visibleActivities.length && <div className={styles.empty}><Clock3 size={32} /><h4>{search ? "No matching activity" : "A fresh start"}</h4><p>{search ? "Try a different search." : "Your interactions with this contact will appear here."}</p></div>}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-            <footer className="flex items-center justify-between border-t border-border bg-white px-5 py-3 text-xs text-[var(--text-tertiary)]"><span>Contact record</span><span className="flex items-center gap-1.5"><CalendarDays className="size-3.5" /> Last activity {relativeDay(contact.lastActivityAt)}</span></footer>
+            <footer className={styles.footer}><span><span className={styles.footerDot} />{contact.companyName || "Contact"} · {name}</span><span>{sending ? "Sending email…" : dirty ? "Unsent draft · kept while this record is open" : "Everything about this relationship, in one place."}</span></footer>
           </section>
         </dialog>, document.body
       )}

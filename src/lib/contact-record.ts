@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { activities, contacts, db, deals, pipelineStages, workspaces } from "@/db";
+import { activities, contacts, db, deals, emailMessages, mailboxes, pipelineStages, workspaces } from "@/db";
 
 /** Match the deployed app's single-workspace access policy; load only on opening a record. */
 export async function loadContactRecord(rawId: string) {
@@ -16,7 +16,7 @@ export async function loadContactRecord(rawId: string) {
   const [contact] = await db.select({ id: contacts.id }).from(contacts)
     .where(and(eq(contacts.id, id), eq(contacts.workspaceId, workspace.id))).limit(1);
   if (!contact) throw new Error("Contact unavailable.");
-  const [history, associatedDeals] = await Promise.all([
+  const [history, associatedDeals, messages, connectedMailboxes] = await Promise.all([
     db.select({
       id: activities.id, type: activities.type, subject: activities.subject,
       body: activities.body, actorName: activities.actorName,
@@ -30,6 +30,18 @@ export async function loadContactRecord(rawId: string) {
     }).from(deals).innerJoin(pipelineStages, eq(deals.stageId, pipelineStages.id))
       .where(and(eq(deals.contactId, id), eq(deals.workspaceId, workspace.id)))
       .orderBy(desc(deals.createdAt)),
+    db.select({
+      id: emailMessages.id, direction: emailMessages.direction,
+      fromAddress: emailMessages.fromAddress, toAddress: emailMessages.toAddress,
+      subject: emailMessages.subject, bodyText: emailMessages.bodyText,
+      sentAt: emailMessages.sentAt,
+    }).from(emailMessages)
+      .where(and(eq(emailMessages.contactId, id), eq(emailMessages.workspaceId, workspace.id)))
+      .orderBy(desc(emailMessages.sentAt)).limit(100),
+    db.select({ emailAddress: mailboxes.emailAddress, providerLabel: mailboxes.providerLabel })
+      .from(mailboxes)
+      .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.workspaceId, workspace.id), eq(mailboxes.status, "connected")))
+      .limit(1),
   ]);
-  return { activities: history, deals: associatedDeals };
+  return { activities: history, deals: associatedDeals, messages, mailbox: connectedMailboxes[0] ?? null };
 }
