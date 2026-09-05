@@ -154,7 +154,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
                 </div>
               </div>
               <div className={styles.headerActions}>
-                <button type="button" className={styles.primaryButton} onClick={compose} disabled={!contact.email || sending}><Mail size={16} /><span>Write email</span></button>
+                <button type="button" aria-label="Write email" className={styles.primaryButton} onClick={compose} disabled={!contact.email || sending}><Mail size={16} /><span>Write email</span></button>
                 <button autoFocus type="button" onClick={requestClose} disabled={sending} aria-label="Close contact record" className={styles.closeButton}><X size={20} /></button>
               </div>
             </header>
@@ -237,7 +237,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
                   ) : (
                     <>
                       <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>{view === "emails" ? "EVERY MESSAGE, IN CONTEXT" : "YOUR RELATIONSHIP TIMELINE"}</span><h3>{view === "emails" ? "Email history" : "Recent activity"}</h3><p>{view === "emails" ? "Read complete messages, including who sent them and when." : "Conversations, notes, and touchpoints with " + contact.firstName + "."}</p></div><span className={styles.headingIcon}>{view === "emails" ? <Inbox size={24} /> : <MessageSquareText size={24} />}</span></div>
-                      <div className={styles.historyTools}><label className={styles.search}><Search size={16} /><input aria-label={view === "emails" ? "Search email history" : "Search activity"} placeholder={view === "emails" ? "Search subjects, messages, or addresses" : "Search this timeline"} value={query} onChange={(event) => setQuery(event.target.value)} /></label><span>{view === "emails" ? visibleMessages.length : visibleActivities.length} {view === "emails" ? "messages" : "activities"}{(view === "emails" ? messages.length : activities.length) === 100 ? " · Latest 100" : ""}</span></div>
+                      <div className={styles.historyTools}><label className={styles.search}><Search size={16} /><input aria-label={view === "emails" ? "Search email history" : "Search activity"} placeholder={view === "emails" ? "Search subjects, messages, or addresses" : "Search this timeline"} value={query} onChange={(event) => setQuery(event.target.value)} /></label><span>{view === "emails" ? visibleMessages.length : visibleActivities.length} {view === "emails" ? (visibleMessages.length === 1 ? "message" : "messages") : (visibleActivities.length === 1 ? "activity" : "activities")}{(view === "emails" ? messages.length : activities.length) === 100 ? " · Latest 100" : ""}</span></div>
                       {view === "emails" ? (
                         <div className={styles.messageList}>{visibleMessages.map((message) => <MessageCard key={message.id} message={message} />)}
                           {data && !visibleMessages.length && <div className={styles.empty}><Inbox size={32} /><h4>{search ? "No matching messages" : "Start a conversation"}</h4><p>{search ? "Try another subject, address, or phrase." : "Emails recorded through Reach will appear here in full."}</p>{!search && contact.email && <button type="button" onClick={compose} className={styles.primaryButton}><Mail size={15} />Write an email</button>}</div>}
@@ -247,7 +247,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
                           {visibleActivities.map((activity) => <article key={activity.id} className={styles.activity}>
                             <span className={styles.timelineIcon}>{activity.type === "email" ? <Mail size={17} /> : activity.type === "call" ? <Phone size={17} /> : <StickyNote size={17} />}</span>
                             <div className={styles.activityCard}><div className={styles.activityMeta}><span>{activity.type.replaceAll("_", " ")}</span><time dateTime={new Date(activity.occurredAt).toISOString()}>{stamp(activity.occurredAt)}</time></div><h4>{activity.subject}</h4>
-                              <p className={styles.activityPreview}>{activity.body || "No additional details."}</p>
+                              <p className={styles.activityPreview}>{activity.body?.replace(/\s+/g, " ") || "No additional details."}</p>
                               {activity.body && <details className={styles.activityDetails}><summary>Read full {activity.type === "email" ? "message" : "details"}<ChevronDown size={14} /></summary><div className={styles.emailBody}>{activity.body}</div></details>}
                               <div className={styles.activityFooter}><span><UserRound size={13} />{activity.actorName || "Reach"}</span>{activity.type === "email" && <button type="button" onClick={() => { setView("emails"); setQuery(""); }}>View email history<ArrowUpRight size={13} /></button>}</div>
                             </div>
