@@ -207,14 +207,23 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
 
                   {view === "compose" ? (
                     <section className={styles.compose}>
-                      <button type="button" className={styles.backButton} onClick={() => setView("emails")} disabled={sending}><ChevronLeft size={15} />Back to emails</button>
-                      <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>KEEP THE CONVERSATION GOING</span><h3>Write an email</h3><p>Send directly to {contact.firstName} from your connected mailbox.</p></div><span className={styles.headingIcon}><Send size={24} /></span></div>
+                      <div className={styles.composeToolbar}>
+                        <div className={styles.composeTitle}>
+                          <button type="button" className={styles.composeBack} aria-label="Back to emails" title="Back to emails" onClick={() => setView("emails")} disabled={sending}><ChevronLeft size={16} /></button>
+                          <h3><Send size={14} />New email</h3>
+                        </div>
+                        {data?.mailbox && contact.email && <>
+                          <div className={`${styles.addressPill} ${styles.senderPill}`} title={"From: " + data.mailbox.emailAddress}>
+                            <span className={styles.addressLabel}>From</span><span className={styles.addressText}>{data.mailbox.emailAddress}</span>
+                          </div>
+                          <div className={`${styles.addressPill} ${styles.recipientPill}`} title={"To: " + name + " <" + contact.email + ">"}>
+                            <span className={styles.addressLabel}>To</span><span className={styles.addressText}><strong>{name}</strong><span className={styles.recipientAddress}> &lt;{contact.email}&gt;</span></span>
+                          </div>
+                          <span className={styles.provider}><span />{data.mailbox.providerLabel}</span>
+                        </>}
+                      </div>
                       {!data ? (!loading && !error && <p className={styles.muted}>Load the contact to check your mailbox.</p>) : !data.mailbox ? <div className={styles.empty}><Mail size={30} /><h4>Connect your mailbox</h4><p>A connected mailbox is needed to send from Reach.</p><Link href="/settings" className={styles.primaryButton}>Open Settings</Link></div> : !contact.email ? <div className={styles.empty}><h4>No email address yet</h4><p>Add an email address using the contact's edit control.</p></div> : (
                         <form onSubmit={send} className={styles.composeForm}>
-                          <div className={styles.composeEnvelope}>
-                            <div><span>From</span><strong>{data.mailbox.emailAddress}</strong><span className={styles.provider}>{data.mailbox.providerLabel}</span></div>
-                            <div><span>To</span><strong>{name} &lt;{contact.email}&gt;</strong></div>
-                          </div>
                           <label className={styles.subjectField}><span>Subject</span><input name="subject" aria-label="Subject" placeholder="Give your email a subject" value={subject} onChange={(event) => setSubject(event.target.value)} required disabled={sending} maxLength={998} autoFocus /></label>
                           <label className={styles.bodyField}><span className={styles.srOnly}>Message</span><textarea name="body" aria-label="Message" placeholder={"Hi " + contact.firstName + ",\n\n"} value={body} onChange={(event) => setBody(event.target.value)} required disabled={sending} rows={11} /></label>
                           {sendError && <div role="alert" className={styles.error}>{sendError}</div>}

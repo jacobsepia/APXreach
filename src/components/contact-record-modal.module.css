@@ -118,14 +118,24 @@
 .deal > div { flex:1; }
 .deal strong { font-size:14px; color:#77538c; }
 .deal p { font-size:11px; color:#a68db6; margin:4px 0 0; }
-.backButton, .textButton { display:inline-flex; gap:5px; align-items:center; padding:0; border:0; background:none; font-size:12px; color:#956ab3; }
-.backButton { margin-bottom:12px; }
+.textButton { display:inline-flex; gap:5px; align-items:center; padding:0; border:0; background:none; font-size:12px; color:#956ab3; }
+.compose { min-width:0; }
+.composeToolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:8px 10px; margin-bottom:10px; border:1px solid #e8dff0; border-radius:11px; background:linear-gradient(100deg,#faf6fe,#fff); }
+.composeTitle { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.composeTitle h3 { display:flex; align-items:center; gap:6px; margin:0 3px 0 0; font-size:12px; font-weight:650; color:#613a7a; white-space:nowrap; }
+.composeTitle h3 svg { color:#9863b7; }
+.composeBack { display:grid; place-items:center; width:28px; height:28px; padding:0; border:1px solid #e7dced; border-radius:8px; background:#fff; color:#9372a8; }
+.composeBack:hover { background:#f0e6f8; color:#6b3291; }
+.addressPill { display:flex; align-items:center; gap:7px; min-width:0; max-width:100%; padding:5px 10px; border:1px solid #e8e0ee; border-radius:999px; background:#fff; font-size:11px; line-height:1.5; }
+.senderPill { flex:1 1 195px; }
+.recipientPill { flex:1.25 1 255px; border-color:#dfd0ec; background:#f4edf9; }
+.addressLabel { flex-shrink:0; color:#9b88a8; font-size:9px; font-weight:650; text-transform:uppercase; letter-spacing:.06em; }
+.addressText { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#7a6488; }
+.addressText strong { color:#68427e; font-weight:600; }
+.recipientAddress { color:#957ea4; }
 .composeForm { border:1px solid #e2d6ec; border-radius:11px; background:#fff; overflow:hidden; box-shadow:0 5px 24px #4e226609; }
-.composeEnvelope { background:#fcfaff; padding:4px 16px; border-bottom:1px solid #ece3f3; }
-.composeEnvelope > div { display:flex; align-items:baseline; flex-wrap:wrap; gap:10px; padding:6px 0; font-size:12px; }
-.composeEnvelope > div > span:first-child { width:38px; color:#ac97bc; flex-shrink:0; }
-.composeEnvelope strong { font-weight:500; color:#735d80; overflow-wrap:anywhere; }
-.provider { margin-left:auto; font-size:10px; color:#899a72; background:#f0f5e9; border-radius:5px; padding:2px 6px; }
+.provider { display:inline-flex; align-items:center; flex-shrink:0; gap:5px; margin-left:auto; font-size:9px; color:#789155; background:#f0f5e9; border:1px solid #e3ebd7; border-radius:999px; padding:4px 8px; white-space:nowrap; }
+.provider > span { width:5px; height:5px; border-radius:50%; background:#9abb6b; }
 .subjectField { display:flex; align-items:center; gap:10px; padding:9px 16px; border-bottom:1px solid #f1eaf6; font-size:12px; }
 .subjectField > span { color:#ab96ba; width:55px; flex-shrink:0; }
 .subjectField input { flex:1; min-width:0; padding:4px 0; color:#654772; background:none; border:0; outline:none; }
@@ -176,6 +186,12 @@
   .historyTools { margin-bottom:10px; }
 }
 @media (max-width:760px) {
+  .composeToolbar { gap:7px; padding:8px; }
+  .composeTitle { order:0; }
+  .composeToolbar .provider { order:1; }
+  .senderPill { order:2; flex-basis:100%; }
+  .recipientPill { order:3; flex-basis:100%; }
+  .addressText { white-space:normal; overflow-wrap:anywhere; }
   .overlay { padding:8px; }
   .shell { border-radius:14px; }
   .header { padding:10px 14px; gap:10px; }
