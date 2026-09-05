@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireTenant } from "@/lib/workspace";
 import { headers } from "next/headers";
 import { and, eq } from "drizzle-orm";
 import { db, connections, mailboxes } from "@/db";
@@ -26,15 +27,16 @@ export default async function SettingsPage({
   searchParams: Promise<{ error?: string; connected?: string; mailbox?: string }>;
 }) {
   const { error, connected: justConnected, mailbox: justLinkedMailbox } = await searchParams;
+  const { workspaceId } = await requireTenant();
   const session = await auth.api.getSession({ headers: await headers() });
-  const [connection] = await db.select().from(connections).limit(1);
+  const [connection] = await db.select().from(connections).where(eq(connections.workspaceId, workspaceId)).limit(1);
   /* A mailbox belongs to the person, so only theirs is shown or offered. */
   const myMailboxes = session
     ? await db
         .select()
         .from(mailboxes)
         .where(
-          and(eq(mailboxes.userId, session.user.id), eq(mailboxes.status, "connected")),
+          and(eq(mailboxes.userId, session.user.id), eq(mailboxes.workspaceId, workspaceId), eq(mailboxes.status, "connected")),
         )
     : [];
   const mailboxOptions = configuredMailboxProviders();

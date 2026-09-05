@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireTenant } from "@/lib/workspace";
 import { headers } from "next/headers";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { companies, contacts, db, mailboxes } from "@/db";
@@ -16,6 +17,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Contacts" };
 
 export default async function ContactsPage() {
+  const { workspaceId } = await requireTenant();
   const session = await auth.api.getSession({ headers: await headers() });
   const [rows, stageCounts, overdueAccounts, companyOptions, [mailbox]] = await Promise.all([
     db
@@ -36,25 +38,28 @@ export default async function ContactsPage() {
         overdueCents: companies.overdueCents,
       })
       .from(contacts)
-      .leftJoin(companies, eq(contacts.companyId, companies.id))
+      .leftJoin(companies, and(eq(contacts.companyId, companies.id), eq(companies.workspaceId, workspaceId)))
+      .where(eq(contacts.workspaceId, workspaceId))
       .orderBy(desc(contacts.lastActivityAt)),
     db
       .select({ stage: contacts.lifecycleStage, count: sql<number>`count(*)` })
       .from(contacts)
+      .where(eq(contacts.workspaceId, workspaceId))
       .groupBy(contacts.lifecycleStage),
     db
       .select({ count: sql<number>`count(*)` })
       .from(companies)
-      .where(sql`${companies.overdueCents} > 0`),
+      .where(and(sql`${companies.overdueCents} > 0`, eq(companies.workspaceId, workspaceId))),
     db
       .select({ id: companies.id, name: companies.name })
       .from(companies)
+      .where(eq(companies.workspaceId, workspaceId))
       .orderBy(companies.name),
     session
       ? db
           .select({ emailAddress: mailboxes.emailAddress })
           .from(mailboxes)
-          .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.status, "connected")))
+          .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.workspaceId, workspaceId), eq(mailboxes.status, "connected")))
           .limit(1)
       : Promise.resolve([] as { emailAddress: string }[]),
   ]);

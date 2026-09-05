@@ -9,6 +9,7 @@ import {
   pipelineStages,
 } from "@/db";
 import { money, relativeDay } from "@/lib/format";
+import { requireTenant } from "@/lib/workspace";
 import { Card, Caps, LedgerDot } from "@/components/ui";
 import { TaskCheckbox } from "@/components/task-checkbox";
 
@@ -17,6 +18,7 @@ export const dynamic = "force-dynamic";
 const timeFmt = new Intl.DateTimeFormat("en-CA", { hour: "numeric", minute: "2-digit" });
 
 export default async function DashboardPage() {
+  const { workspaceId } = await requireTenant();
   const monthStart = new Date();
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
@@ -33,7 +35,7 @@ export default async function DashboardPage() {
         })
         .from(deals)
         .innerJoin(pipelineStages, eq(deals.stageId, pipelineStages.id))
-        .where(eq(deals.status, "open"))
+        .where(and(eq(deals.status, "open"), eq(deals.workspaceId, workspaceId)))
         .groupBy(pipelineStages.name, pipelineStages.displayOrder)
         .orderBy(asc(pipelineStages.displayOrder)),
       db
@@ -42,18 +44,18 @@ export default async function DashboardPage() {
           count: sql<number>`count(*)`,
         })
         .from(deals)
-        .where(and(eq(deals.status, "won"), gte(deals.wonAt, monthStart))),
+        .where(and(eq(deals.status, "won"), gte(deals.wonAt, monthStart), eq(deals.workspaceId, workspaceId))),
       db
         .select({ total: sql<number>`coalesce(sum(${syncedInvoices.outstandingCents}), 0)` })
         .from(syncedInvoices)
-        .where(ne(syncedInvoices.status, "paid")),
+        .where(and(ne(syncedInvoices.status, "paid"), eq(syncedInvoices.workspaceId, workspaceId))),
       db
         .select({
           total: sql<number>`coalesce(sum(${syncedInvoices.outstandingCents}), 0)`,
           count: sql<number>`count(*)`,
         })
         .from(syncedInvoices)
-        .where(eq(syncedInvoices.status, "overdue")),
+        .where(and(eq(syncedInvoices.status, "overdue"), eq(syncedInvoices.workspaceId, workspaceId))),
       db
         .select({
           id: activities.id,
@@ -61,7 +63,7 @@ export default async function DashboardPage() {
           dueAt: activities.dueAt,
         })
         .from(activities)
-        .where(and(eq(activities.type, "task"), isNull(activities.completedAt)))
+        .where(and(eq(activities.type, "task"), isNull(activities.completedAt), eq(activities.workspaceId, workspaceId)))
         .orderBy(asc(activities.dueAt))
         .limit(5),
       db
@@ -73,7 +75,7 @@ export default async function DashboardPage() {
         })
         .from(companies)
         .innerJoin(deals, and(eq(deals.companyId, companies.id), eq(deals.status, "open")))
-        .where(sql`${companies.overdueCents} > 0`)
+        .where(and(sql`${companies.overdueCents} > 0`, eq(companies.workspaceId, workspaceId)))
         .groupBy(companies.id, companies.name, companies.overdueCents)
         .orderBy(desc(companies.overdueCents))
         .limit(2),
@@ -86,7 +88,7 @@ export default async function DashboardPage() {
         })
         .from(deals)
         .leftJoin(companies, eq(deals.companyId, companies.id))
-        .where(and(eq(deals.status, "open"), lt(deals.updatedAt, fourteenDaysAgo)))
+        .where(and(eq(deals.status, "open"), lt(deals.updatedAt, fourteenDaysAgo), eq(deals.workspaceId, workspaceId)))
         .orderBy(asc(deals.updatedAt))
         .limit(2),
       db
@@ -96,7 +98,7 @@ export default async function DashboardPage() {
           companyId: activities.companyId,
         })
         .from(activities)
-        .where(and(eq(activities.type, "ledger_event"), sql`${activities.subject} ilike '%paid%'`))
+        .where(and(eq(activities.type, "ledger_event"), sql`${activities.subject} ilike '%paid%'`, eq(activities.workspaceId, workspaceId)))
         .orderBy(desc(activities.occurredAt))
         .limit(1),
     ]);

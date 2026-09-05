@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { activities, companies, db } from "@/db";
+import { requireTenant } from "@/lib/workspace";
 import { Card } from "@/components/ui";
 import { QuickCreate } from "@/components/quick-create";
 import { TaskCheckbox } from "@/components/task-checkbox";
@@ -19,6 +20,7 @@ const stamp = new Intl.DateTimeFormat("en-CA", {
 });
 
 export default async function TasksPage() {
+  const tenant = await requireTenant();
   const [rows, companyOptions] = await Promise.all([
     db
       .select({
@@ -31,9 +33,9 @@ export default async function TasksPage() {
       })
       .from(activities)
       .leftJoin(companies, eq(activities.companyId, companies.id))
-      .where(and(eq(activities.type, "task"), isNull(activities.completedAt)))
+      .where(and(eq(activities.type, "task"), isNull(activities.completedAt), eq(activities.workspaceId, tenant.workspaceId)))
       .orderBy(asc(activities.dueAt)),
-    db.select({ id: companies.id, name: companies.name }).from(companies).orderBy(companies.name),
+    db.select({ id: companies.id, name: companies.name }).from(companies).where(eq(companies.workspaceId, tenant.workspaceId)).orderBy(companies.name),
   ]);
 
   return (

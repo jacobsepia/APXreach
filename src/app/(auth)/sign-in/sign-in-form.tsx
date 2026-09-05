@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { signIn } from "@/lib/auth-client";
+import { safeAuthDestination } from "@/lib/auth-redirect";
 import { ApxSignIn, OrDivider } from "@/components/apx-sign-in";
 
 const field =
@@ -15,13 +16,14 @@ export function SignInForm({ ledgerReady }: { ledgerReady: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   /* Where the route guard wanted to send them before it asked who they were. */
-  const destination = params.get("to") ?? "/dashboard";
+  const destination = safeAuthDestination(params.get("to"));
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     const data = new FormData(e.currentTarget);
+    try {
     const result = await signIn.email({
       email: String(data.get("email") ?? ""),
       password: String(data.get("password") ?? ""),
@@ -33,6 +35,11 @@ export function SignInForm({ ledgerReady }: { ledgerReady: boolean }) {
     }
     router.push(destination);
     router.refresh();
+    } catch {
+      setError("Could not reach Reach. Please try signing in again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

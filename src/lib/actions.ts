@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
+import { requireTenantOrThrow } from "@/lib/workspace";
+import { provisionWorkspace } from "@/lib/workspace-store";
 import {
   activities,
   companies,
@@ -17,7 +19,7 @@ import {
   mailboxes,
   pipelineStages,
   syncedInvoices,
-  workspaces,
+  pipelines,
 } from "@/db";
 import { runSync } from "@/lib/sync";
 import { getProvider } from "@/lib/providers";
@@ -25,18 +27,9 @@ import { getMailboxProvider } from "@/lib/mailbox/providers";
 import { sendFromMailbox } from "@/lib/mailbox/send";
 import { clientCredentials, revokeToken } from "@/lib/oauth";
 
-/*
- * Phase 1 mutations, as server actions. One workspace for now — the actions
- * resolve it themselves; when auth lands this becomes the session's workspace
- * and these functions grow an authorization check at the top.
- */
-
+/** Every mutation resolves membership on the server, never from form fields. */
 async function workspaceId(): Promise<string> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) throw new Error("Not signed in.");
-  const [ws] = await db.select({ id: workspaces.id }).from(workspaces).limit(1);
-  if (!ws) throw new Error("No workspace yet — run the seed or create one.");
-  return ws.id;
+  return (await requireTenantOrThrow()).workspaceId;
 }
 
 /** The signed-in person's name, for timeline attribution. */
@@ -81,6 +74,7 @@ export async function createContact(formData: FormData): Promise<void> {
   const firstName = trimmed.min(1, "First name is required.").parse(formData.get("firstName"));
   const lastName = trimmed.parse(formData.get("lastName") ?? "") || "—";
   const companyId = optionalText.parse(formData.get("companyId") ?? "");
+  await assertCompany(wsId, companyId);
   await db.insert(contacts).values({
     workspaceId: wsId,
     firstName,
@@ -101,12 +95,9 @@ export async function createDeal(formData: FormData): Promise<void> {
   const wsId = await workspaceId();
   const name = trimmed.min(1, "Deal name is required.").parse(formData.get("name"));
   const stageId = trimmed.min(1, "Pick a stage.").parse(formData.get("stageId"));
-  const [stage] = await db
-    .select()
-    .from(pipelineStages)
-    .where(eq(pipelineStages.id, stageId));
-  if (!stage) throw new Error("Unknown stage.");
+  const stage = await tenantStage(wsId, stageId);
   const companyId = optionalText.parse(formData.get("companyId") ?? "");
+  await assertCompany(wsId, companyId);
   await db.insert(deals).values({
     workspaceId: wsId,
     name,
@@ -128,6 +119,7 @@ export async function createTask(formData: FormData): Promise<void> {
   const subject = trimmed.min(1, "The task needs a description.").parse(formData.get("subject"));
   const dueRaw = optionalText.parse(formData.get("dueAt") ?? "");
   const companyId = optionalText.parse(formData.get("companyId") ?? "");
+  await assertCompany(wsId, companyId);
   await db.insert(activities).values({
     workspaceId: wsId,
     type: "task",
@@ -167,6 +159,7 @@ export async function reopenTask(formData: FormData): Promise<void> {
 export async function logActivity(formData: FormData): Promise<void> {
   const wsId = await workspaceId();
   const companyId = trimmed.min(1).parse(formData.get("companyId"));
+  await assertCompany(wsId, companyId);
   const type = z.enum(["note", "call", "email", "meeting"]).parse(formData.get("type"));
   const body = trimmed.min(1, "Write something first.").parse(formData.get("body"));
   const labels = { note: "Note", call: "Call logged", email: "Email logged", meeting: "Meeting" };
@@ -182,7 +175,7 @@ export async function logActivity(formData: FormData): Promise<void> {
   await db
     .update(contacts)
     .set({ lastActivityAt: new Date() })
-    .where(eq(contacts.companyId, companyId));
+    .where(and(eq(contacts.companyId, companyId), eq(contacts.workspaceId, wsId)));
   revalidatePath(`/companies/${companyId}`);
 }
 
@@ -190,15 +183,12 @@ export async function setDealStage(formData: FormData): Promise<void> {
   const wsId = await workspaceId();
   const dealId = trimmed.min(1).parse(formData.get("dealId"));
   const stageId = trimmed.min(1).parse(formData.get("stageId"));
-  const [stage] = await db
-    .select()
-    .from(pipelineStages)
-    .where(eq(pipelineStages.id, stageId));
-  if (!stage) throw new Error("Unknown stage.");
+  const stage = await tenantStage(wsId, stageId);
   await db
     .update(deals)
     .set({
       stageId,
+      pipelineId: stage.pipelineId,
       status: stage.kind === "won" ? "won" : stage.kind === "lost" ? "lost" : "open",
       wonAt: stage.kind === "won" ? new Date() : null,
       updatedAt: new Date(),
@@ -212,9 +202,8 @@ export async function setDealStage(formData: FormData): Promise<void> {
  * Editing and deleting. Every one of these is scoped to the workspace as well
  * as the id: the id arrives from a form and is therefore the caller's to
  * choose, so matching on it alone would let a signed-in person edit a record
- * belonging to a workspace they cannot see. There is one workspace today,
- * which is exactly why the check has to go in now — the day there are two is
- * not the day to remember it.
+ * belonging to a workspace they cannot see. Related companies and pipeline
+ * stages are validated against the same membership before every write.
  *
  * Nothing cascades in the schema, so deletes detach their dependents by hand
  * rather than failing on a foreign key. A record is let go of; the notes and
@@ -262,12 +251,12 @@ export async function deleteCompany(formData: FormData): Promise<void> {
     .where(and(eq(companies.id, id), eq(companies.workspaceId, wsId)));
   assertTouched(company ? [company] : [], "company");
 
-  await db.update(contacts).set({ companyId: null }).where(eq(contacts.companyId, id));
-  await db.update(deals).set({ companyId: null }).where(eq(deals.companyId, id));
-  await db.update(activities).set({ companyId: null }).where(eq(activities.companyId, id));
-  await db.update(emailMessages).set({ companyId: null }).where(eq(emailMessages.companyId, id));
+  await db.update(contacts).set({ companyId: null }).where(and(eq(contacts.companyId, id), eq(contacts.workspaceId, wsId)));
+  await db.update(deals).set({ companyId: null }).where(and(eq(deals.companyId, id), eq(deals.workspaceId, wsId)));
+  await db.update(activities).set({ companyId: null }).where(and(eq(activities.companyId, id), eq(activities.workspaceId, wsId)));
+  await db.update(emailMessages).set({ companyId: null }).where(and(eq(emailMessages.companyId, id), eq(emailMessages.workspaceId, wsId)));
   /* The invoice mirror is a cache keyed to the company; it has nowhere to go. */
-  await db.delete(syncedInvoices).where(eq(syncedInvoices.companyId, id));
+  await db.delete(syncedInvoices).where(and(eq(syncedInvoices.companyId, id), eq(syncedInvoices.workspaceId, wsId)));
   await db.delete(companies).where(and(eq(companies.id, id), eq(companies.workspaceId, wsId)));
 
   revalidatePath("/companies");
@@ -281,6 +270,7 @@ export async function updateContact(formData: FormData): Promise<void> {
   const wsId = await workspaceId();
   const id = trimmed.min(1).parse(formData.get("id"));
   const companyId = optionalText.parse(formData.get("companyId") ?? "");
+  await assertCompany(wsId, companyId);
   const touched = await db
     .update(contacts)
     .set({
@@ -310,9 +300,9 @@ export async function deleteContact(formData: FormData): Promise<void> {
     .where(and(eq(contacts.id, id), eq(contacts.workspaceId, wsId)));
   assertTouched(contact ? [contact] : [], "contact");
 
-  await db.update(deals).set({ contactId: null }).where(eq(deals.contactId, id));
-  await db.update(activities).set({ contactId: null }).where(eq(activities.contactId, id));
-  await db.update(emailMessages).set({ contactId: null }).where(eq(emailMessages.contactId, id));
+  await db.update(deals).set({ contactId: null }).where(and(eq(deals.contactId, id), eq(deals.workspaceId, wsId)));
+  await db.update(activities).set({ contactId: null }).where(and(eq(activities.contactId, id), eq(activities.workspaceId, wsId)));
+  await db.update(emailMessages).set({ contactId: null }).where(and(eq(emailMessages.contactId, id), eq(emailMessages.workspaceId, wsId)));
   await db.delete(contacts).where(and(eq(contacts.id, id), eq(contacts.workspaceId, wsId)));
 
   revalidatePath("/contacts");
@@ -329,12 +319,9 @@ export async function updateDeal(formData: FormData): Promise<void> {
   assertTouched(existing ? [existing] : [], "deal");
 
   const stageId = trimmed.min(1, "Pick a stage.").parse(formData.get("stageId"));
-  const [stage] = await db
-    .select()
-    .from(pipelineStages)
-    .where(eq(pipelineStages.id, stageId));
-  if (!stage) throw new Error("Unknown stage.");
+  const stage = await tenantStage(wsId, stageId);
   const companyId = optionalText.parse(formData.get("companyId") ?? "");
+  await assertCompany(wsId, companyId);
 
   await db
     .update(deals)
@@ -367,7 +354,7 @@ export async function deleteDeal(formData: FormData): Promise<void> {
     .where(and(eq(deals.id, id), eq(deals.workspaceId, wsId)));
   assertTouched(deal ? [deal] : [], "deal");
 
-  await db.update(activities).set({ dealId: null }).where(eq(activities.dealId, id));
+  await db.update(activities).set({ dealId: null }).where(and(eq(activities.dealId, id), eq(activities.workspaceId, wsId)));
   await db.delete(deals).where(and(eq(deals.id, id), eq(deals.workspaceId, wsId)));
 
   revalidatePath("/deals");
@@ -380,6 +367,7 @@ export async function updateTask(formData: FormData): Promise<void> {
   const id = trimmed.min(1).parse(formData.get("id"));
   const dueRaw = optionalText.parse(formData.get("dueAt") ?? "");
   const companyId = optionalText.parse(formData.get("companyId") ?? "");
+  await assertCompany(wsId, companyId);
   const touched = await db
     .update(activities)
     .set({
@@ -425,6 +413,7 @@ export async function deleteTask(formData: FormData): Promise<void> {
  * back on their behalf.
  */
 export async function disconnectMailbox(formData: FormData): Promise<void> {
+  const wsId = await workspaceId();
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) throw new Error("Not signed in.");
   const id = trimmed.min(1).parse(formData.get("mailboxId"));
@@ -432,7 +421,7 @@ export async function disconnectMailbox(formData: FormData): Promise<void> {
   const [mailbox] = await db
     .select()
     .from(mailboxes)
-    .where(and(eq(mailboxes.id, id), eq(mailboxes.userId, session.user.id)));
+    .where(and(eq(mailboxes.id, id), eq(mailboxes.userId, session.user.id), eq(mailboxes.workspaceId, wsId)));
   if (!mailbox) throw new Error("That mailbox is not yours to disconnect.");
 
   const provider = getMailboxProvider(mailbox.provider);
@@ -469,7 +458,13 @@ export async function sendEmailFromRecord(formData: FormData): Promise<void> {
   const wsId = await workspaceId();
 
   const companyId = optionalText.parse(formData.get("companyId") ?? "");
+  await assertCompany(wsId, companyId);
   const contactId = optionalText.parse(formData.get("contactId") ?? "");
+  if (contactId) {
+    const [contact] = await db.select({ id: contacts.id, companyId: contacts.companyId }).from(contacts)
+      .where(and(eq(contacts.id, z.uuid().parse(contactId)), eq(contacts.workspaceId, wsId))).limit(1);
+    if (!contact || (companyId && contact.companyId !== companyId)) throw new Error("Contact unavailable for this company.");
+  }
   const to = z
     .string()
     .trim()
@@ -481,7 +476,7 @@ export async function sendEmailFromRecord(formData: FormData): Promise<void> {
   const [mailbox] = await db
     .select()
     .from(mailboxes)
-    .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.status, "connected")))
+    .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.workspaceId, wsId), eq(mailboxes.status, "connected")))
     .limit(1);
   if (!mailbox) {
     throw new Error("Connect a mailbox in Settings first — Reach sends as you, not as itself.");
@@ -600,4 +595,33 @@ export async function disconnectBooks(): Promise<void> {
 
   revalidatePath("/settings");
   revalidatePath("/dashboard");
+}
+
+async function assertCompany(wsId: string, id: string | null): Promise<void> {
+  if (!id) return;
+  const [row] = await db.select({ id: companies.id }).from(companies)
+    .where(and(eq(companies.id, z.uuid().parse(id)), eq(companies.workspaceId, wsId))).limit(1);
+  if (!row) throw new Error("Company unavailable.");
+}
+
+async function tenantStage(wsId: string, id: string) {
+  const [row] = await db.select({ stage: pipelineStages }).from(pipelineStages)
+    .innerJoin(pipelines, eq(pipelines.id, pipelineStages.pipelineId))
+    .where(and(eq(pipelineStages.id, z.uuid().parse(id)), eq(pipelines.workspaceId, wsId))).limit(1);
+  if (!row) throw new Error("Stage unavailable.");
+  return row.stage;
+}
+
+export async function createWorkspace(formData: FormData): Promise<void> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/sign-in");
+  const parsed = trimmed.min(1).max(80).safeParse(formData.get("companyName"));
+  if (!parsed.success) redirect("/welcome?error=Enter+a+company+name+(1-80+characters).");
+  try {
+    await provisionWorkspace(session.user.id, parsed.data);
+  } catch {
+    redirect("/welcome?error=Could+not+create+your+workspace.+Please+try+again.");
+  }
+  revalidatePath("/", "layout");
+  redirect("/dashboard");
 }

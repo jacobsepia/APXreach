@@ -16,6 +16,7 @@ import {
 import { daysBetween, money, monthYear, shortDate } from "@/lib/format";
 import { Avatar, Card, Caps, LedgerDot, Pill } from "@/components/ui";
 import { TimelineComposer } from "@/components/timeline-composer";
+import { requireTenant } from "@/lib/workspace";
 import { RecordActions } from "@/components/record-actions";
 import { ComposeEmail } from "@/components/compose-email";
 import { auth } from "@/lib/auth";
@@ -79,12 +80,18 @@ export default async function CompanyPage({
 }) {
   const { id } = await params;
 
-  const [company] = await db.select().from(companies).where(eq(companies.id, id));
+  const { workspaceId } = await requireTenant();
+  /* Scoped by workspace, not just by id — otherwise a guessed uuid from
+     another tenant would render their customer's books. */
+  const [company] = await db
+    .select()
+    .from(companies)
+    .where(and(eq(companies.id, id), eq(companies.workspaceId, workspaceId)));
   if (!company) notFound();
 
   const session = await auth.api.getSession({ headers: await headers() });
   const [people, openDeals, timeline, invoices, [connection], [mailbox]] = await Promise.all([
-    db.select().from(contacts).where(eq(contacts.companyId, id)),
+    db.select().from(contacts).where(and(eq(contacts.companyId, id), eq(contacts.workspaceId, workspaceId))),
     db
       .select({
         id: deals.id,
@@ -95,28 +102,28 @@ export default async function CompanyPage({
       })
       .from(deals)
       .innerJoin(pipelineStages, eq(deals.stageId, pipelineStages.id))
-      .where(and(eq(deals.companyId, id), eq(deals.status, "open"))),
+      .where(and(and(eq(deals.companyId, id), eq(deals.workspaceId, workspaceId)), eq(deals.status, "open"))),
     db
       .select()
       .from(activities)
-      .where(and(eq(activities.companyId, id), ne(activities.type, "task")))
+      .where(and(and(eq(activities.companyId, id), eq(activities.workspaceId, workspaceId)), ne(activities.type, "task")))
       .orderBy(desc(activities.occurredAt))
       .limit(8),
     db
       .select()
       .from(syncedInvoices)
-      .where(and(eq(syncedInvoices.companyId, id), ne(syncedInvoices.status, "paid")))
+      .where(and(and(eq(syncedInvoices.companyId, id), eq(syncedInvoices.workspaceId, workspaceId)), ne(syncedInvoices.status, "paid")))
       .orderBy(desc(syncedInvoices.issuedDate)),
     db
       .select()
       .from(connections)
-      .where(eq(connections.workspaceId, company.workspaceId))
+      .where(eq(connections.workspaceId, workspaceId))
       .limit(1),
     session
       ? db
           .select({ emailAddress: mailboxes.emailAddress })
           .from(mailboxes)
-          .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.status, "connected")))
+          .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.workspaceId, workspaceId), eq(mailboxes.status, "connected")))
           .limit(1)
       : Promise.resolve([] as { emailAddress: string }[]),
   ]);

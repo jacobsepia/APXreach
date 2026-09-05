@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { connections, db } from "@/db";
 import { getProvider } from "@/lib/providers";
 import { runSync } from "@/lib/sync";
@@ -50,14 +50,14 @@ export async function POST(
   } catch {
     return Response.json({ error: "invalid_json" }, { status: 400 });
   }
-  if (typeof claimed.companyId !== "string") {
+  if (!claimed || typeof claimed.companyId !== "string") {
     return Response.json({ error: "invalid_payload" }, { status: 400 });
   }
 
-  const [connection] = await db
+  const candidates = await db
     .select()
     .from(connections)
-    .where(eq(connections.externalCompanyId, claimed.companyId));
+    .where(and(eq(connections.externalCompanyId, claimed.companyId), eq(connections.provider, providerId), eq(connections.status, "connected")));
 
   /*
    * An unknown company and a bad signature answer identically. Telling a
@@ -65,6 +65,7 @@ export async function POST(
    * ask whether a given company is connected to Reach.
    */
   const signature = request.headers.get("x-apx-signature") ?? "";
+  const connection = candidates.find((candidate) => candidate.webhookSecret && provider.webhooks!.verify(candidate.webhookSecret, body, signature));
   if (
     !connection?.webhookSecret ||
     connection.status !== "connected" ||

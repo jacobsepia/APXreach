@@ -14,9 +14,11 @@ import {
   deals,
   connections,
   syncedInvoices,
+  pipelines,
   pipelineStages,
-  workspaces,
+
 } from "@/db";
+import { requireTenant } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -33,15 +35,12 @@ function syncedLabel(at: Date | null): string | null {
 export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  /* The proxy checked for a cookie; this is the real check. */
+  /* The proxy checked for a cookie; this is the real check — and it resolves
+     which tenant the whole subtree renders for. */
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/sign-in");
-
-  const [workspace] = await db.select().from(workspaces).limit(1);
-
-  if (!workspace) {
-    return <div className="p-8 text-sm text-muted-foreground">No workspace yet — run the seed.</div>;
-  }
+  const tenant = await requireTenant();
+  const workspace = { id: tenant.workspaceId, name: tenant.workspaceName };
 
   const monthStart = new Date();
   monthStart.setDate(1);
@@ -73,37 +72,38 @@ export default async function AppLayout({
     db
       .select({ id: pipelineStages.id, name: pipelineStages.name })
       .from(pipelineStages)
-      .where(ne(pipelineStages.kind, "lost"))
+      .innerJoin(pipelines, eq(pipelines.id, pipelineStages.pipelineId))
+      .where(and(ne(pipelineStages.kind, "lost"), eq(pipelines.workspaceId, workspace.id)))
       .orderBy(asc(pipelineStages.displayOrder)),
     db
       .select({ total: sql<number>`coalesce(sum(${deals.amountCents}), 0)`, count: sql<number>`count(*)` })
       .from(deals)
-      .where(eq(deals.status, "open"))
+      .where(and(eq(deals.status, "open"), eq(deals.workspaceId, workspace.id)))
       .then((r) => r[0]),
     db
       .select({ total: sql<number>`coalesce(sum(${deals.amountCents}), 0)` })
       .from(deals)
-      .where(and(eq(deals.status, "won"), gte(deals.wonAt, monthStart)))
+      .where(and(eq(deals.status, "won"), gte(deals.wonAt, monthStart), eq(deals.workspaceId, workspace.id)))
       .then((r) => r[0]),
     db
       .select({ total: sql<number>`coalesce(sum(${syncedInvoices.outstandingCents}), 0)` })
       .from(syncedInvoices)
-      .where(ne(syncedInvoices.status, "paid"))
+      .where(and(ne(syncedInvoices.status, "paid"), eq(syncedInvoices.workspaceId, workspace.id)))
       .then((r) => r[0]),
     db
       .select({ total: sql<number>`coalesce(sum(${syncedInvoices.outstandingCents}), 0)`, count: sql<number>`count(*)` })
       .from(syncedInvoices)
-      .where(eq(syncedInvoices.status, "overdue"))
+      .where(and(eq(syncedInvoices.status, "overdue"), eq(syncedInvoices.workspaceId, workspace.id)))
       .then((r) => r[0]),
     db
       .select({ count: sql<number>`count(*)` })
       .from(activities)
-      .where(and(eq(activities.type, "task"), isNull(activities.completedAt)))
+      .where(and(eq(activities.type, "task"), isNull(activities.completedAt), eq(activities.workspaceId, workspace.id)))
       .then((r) => r[0]),
     db
       .select({ count: sql<number>`count(*)` })
       .from(deals)
-      .where(and(eq(deals.status, "open"), lt(deals.updatedAt, fourteenDaysAgo)))
+      .where(and(eq(deals.status, "open"), lt(deals.updatedAt, fourteenDaysAgo), eq(deals.workspaceId, workspace.id)))
       .then((r) => r[0]),
   ]);
 

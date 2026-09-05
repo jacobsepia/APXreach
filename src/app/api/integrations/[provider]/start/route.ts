@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireTenant } from "@/lib/workspace";
 import { getProvider } from "@/lib/providers";
 import {
   authorizeUrl,
@@ -43,6 +44,7 @@ export async function GET(
   }
 
   const { provider: providerId } = await params;
+  const tenant = await requireTenant();
   const provider = getProvider(providerId);
   if (!provider?.oauth) {
     return settingsError(origin, "That provider can't be connected yet.");
@@ -52,7 +54,7 @@ export async function GET(
   if (!credentials.ok) return settingsError(origin, credentials.error);
 
   const { verifier, challenge } = createPkcePair();
-  const state = createState();
+  const state = `${tenant.userId}:${tenant.workspaceId}:${createState()}`;
 
   const response = NextResponse.redirect(
     authorizeUrl({

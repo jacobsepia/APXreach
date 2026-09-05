@@ -5,9 +5,11 @@ import {
   text,
   timestamp,
   uuid,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export * from "./auth";
+import { user } from "./auth";
 
 /*
  * APX Reach — CRM core schema, Phase 0/1.
@@ -28,6 +30,14 @@ export const workspaces = pgTable("workspaces", {
   slug: text("slug").notNull().unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const workspaceMembers = pgTable("workspace_members", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
+  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }).notNull(),
+  role: text("role").default("owner").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [uniqueIndex("workspace_members_user_workspace_idx").on(table.userId, table.workspaceId)]);
 
 export const companies = pgTable("companies", {
   id: uuid("id").defaultRandom().primaryKey(),

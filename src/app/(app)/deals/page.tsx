@@ -1,9 +1,10 @@
-import { asc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { companies, db, deals, syncedInvoices, pipelineStages, pipelines } from "@/db";
 import { daysBetween, money, shortDate } from "@/lib/format";
 import { Avatar, Card, Pill } from "@/components/ui";
 import { QuickCreate } from "@/components/quick-create";
 import { StageSelect } from "@/components/stage-select";
+import { requireTenant } from "@/lib/workspace";
 import { RecordActions } from "@/components/record-actions";
 import { AlertTriangle, Check, ChevronDown, FileText, Clock } from "lucide-react";
 
@@ -12,7 +13,13 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Deals" };
 
 export default async function DealsPage() {
-  const [pipeline] = await db.select().from(pipelines).orderBy(asc(pipelines.displayOrder)).limit(1);
+  const { workspaceId } = await requireTenant();
+  const [pipeline] = await db
+    .select()
+    .from(pipelines)
+    .where(eq(pipelines.workspaceId, workspaceId))
+    .orderBy(asc(pipelines.displayOrder))
+    .limit(1);
   if (!pipeline) {
     return <p className="text-sm text-muted-foreground">No pipeline yet.</p>;
   }
@@ -41,15 +48,16 @@ export default async function DealsPage() {
       })
       .from(deals)
       .leftJoin(companies, eq(deals.companyId, companies.id))
-      .where(inArray(deals.status, ["open", "won"]))
+      .where(and(inArray(deals.status, ["open", "won"]), eq(deals.workspaceId, workspaceId)))
       .orderBy(asc(deals.closeDate)),
     db
       .select({ number: syncedInvoices.number })
       .from(syncedInvoices)
-      .where(ne(syncedInvoices.status, "paid")),
+      .where(and(ne(syncedInvoices.status, "paid"), eq(syncedInvoices.workspaceId, workspaceId))),
     db
       .select({ id: companies.id, name: companies.name })
       .from(companies)
+      .where(eq(companies.workspaceId, workspaceId))
       .orderBy(companies.name),
   ]);
   const stageOptions = stages
