@@ -17,12 +17,27 @@ export interface ProviderCompany {
   scopes: string[];
 }
 
+/*
+ * A "contact" in the books is a business you invoice or pay — Xero's word,
+ * and Ledger's. In the CRM that is a COMPANY, and the person named on it is
+ * the contact. Both come through here so the sync can make both.
+ */
 export interface NormalizedContact {
   externalId: string;
+  /** The business, as the books know it. */
   name: string;
+  /** The person on the account, where the books name one. */
+  contactPerson: string | null;
   email: string | null;
   phone: string | null;
+  city: string | null;
   isCustomer: boolean;
+  /**
+   * A supplier is somewhere the business BUYS from. Suppliers are not
+   * prospects and do not belong on a sales pipeline; the sync skips any
+   * contact that is a supplier and nothing else.
+   */
+  isSupplier: boolean;
 }
 
 export interface NormalizedInvoice {

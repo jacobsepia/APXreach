@@ -43,8 +43,10 @@ const connectionSchema = z.object({
 const contactSchema = z.object({
   id: z.string(),
   name: z.string(),
+  contactPerson: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
   phone: z.string().nullable().optional(),
+  address: z.object({ city: z.string().nullable().optional() }).partial().optional(),
   isCustomer: z.boolean(),
   isSupplier: z.boolean(),
 });
@@ -299,9 +301,12 @@ export const apxledger: AccountingProvider = {
       contacts.push({
         externalId: parsed.data.id,
         name: parsed.data.name,
+        contactPerson: parsed.data.contactPerson ?? null,
         email: parsed.data.email ?? null,
         phone: parsed.data.phone ?? null,
+        city: parsed.data.address?.city ?? null,
         isCustomer: parsed.data.isCustomer,
+        isSupplier: parsed.data.isSupplier,
       });
     }
 

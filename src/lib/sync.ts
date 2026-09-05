@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { activities, companies, connections, db, syncedInvoices, workspaces } from "@/db";
+import { activities, companies, connections, contacts, db, syncedInvoices, workspaces } from "@/db";
 import { getProvider, type AccountingProvider, type OAuthTokens } from "@/lib/providers";
 import { clientCredentials, refreshTokens } from "@/lib/oauth";
 
@@ -203,14 +203,29 @@ export async function runSync(workspaceId: string): Promise<void> {
 
   const pulled = await provider.pull(credential.credential, connection.externalCompanyId);
   if (!pulled.ok) return fail(pulled.error);
-  const { contacts, invoices } = pulled.value;
+  const { contacts: pulledContacts, invoices } = pulled.value;
 
-  // ── Contacts become (or update) companies, keyed by the provider's own id.
+  // ── A books contact is a business you invoice. It becomes (or updates) a
+  //    COMPANY, keyed by the provider's own id, and the person named on the
+  //    account becomes a CONTACT on it — that person is who you email.
   let companiesCreated = 0;
+  let peopleCreated = 0;
+  let suppliersSkipped = 0;
   const companyIdByExternal = new Map<string, string>();
-  for (const contact of contacts) {
+  for (const contact of pulledContacts) {
+    /*
+     * Somewhere the business BUYS from is not a prospect. A supplier that is
+     * also a customer stays — you can sell to a firm you also buy from — but
+     * a pure supplier has no place on a sales pipeline.
+     */
+    if (contact.isSupplier && !contact.isCustomer) {
+      suppliersSkipped++;
+      continue;
+    }
+
+    let companyId: string;
     const [existing] = await db
-      .select({ id: companies.id })
+      .select({ id: companies.id, city: companies.city })
       .from(companies)
       .where(
         and(
@@ -219,33 +234,81 @@ export async function runSync(workspaceId: string): Promise<void> {
         ),
       );
     if (existing) {
-      companyIdByExternal.set(contact.externalId, existing.id);
-      continue;
-    }
-    // Match a CRM company created before the sync by exact name, else create.
-    const [byName] = await db
-      .select({ id: companies.id })
-      .from(companies)
-      .where(and(eq(companies.workspaceId, workspaceId), eq(companies.name, contact.name)));
-    if (byName) {
-      await db
-        .update(companies)
-        .set({ externalContactId: contact.externalId, updatedAt: new Date() })
-        .where(eq(companies.id, byName.id));
-      companyIdByExternal.set(contact.externalId, byName.id);
+      companyId = existing.id;
+      /* The books know the city; a blank in Reach is not a decision. */
+      if (!existing.city && contact.city) {
+        await db
+          .update(companies)
+          .set({ city: contact.city, updatedAt: new Date() })
+          .where(eq(companies.id, companyId));
+      }
     } else {
-      const [created] = await db
-        .insert(companies)
-        .values({
+      // Match a CRM company created before the sync by exact name, else create.
+      const [byName] = await db
+        .select({ id: companies.id })
+        .from(companies)
+        .where(and(eq(companies.workspaceId, workspaceId), eq(companies.name, contact.name)));
+      if (byName) {
+        await db
+          .update(companies)
+          .set({ externalContactId: contact.externalId, updatedAt: new Date() })
+          .where(eq(companies.id, byName.id));
+        companyId = byName.id;
+      } else {
+        const [created] = await db
+          .insert(companies)
+          .values({
+            workspaceId,
+            name: contact.name,
+            city: contact.city,
+            externalContactId: contact.externalId,
+            lifecycleStage: contact.isCustomer ? "customer" : "lead",
+            source: connection.providerLabel,
+          })
+          .returning({ id: companies.id });
+        companyId = created.id;
+        companiesCreated++;
+      }
+    }
+    companyIdByExternal.set(contact.externalId, companyId);
+
+    /*
+     * The person. Ledger names one on most accounts; where it does not but
+     * there is an address to write to, the business name stands in so the
+     * email is still reachable from a record. No name and no email means
+     * nobody to reach, so no row.
+     */
+    if (contact.contactPerson || contact.email) {
+      const [first, ...rest] = (contact.contactPerson ?? contact.name).trim().split(/\s+/);
+      const person = {
+        companyId,
+        firstName: first || contact.name,
+        lastName: rest.join(" ") || "—",
+        email: contact.email,
+        phone: contact.phone,
+        lifecycleStage: contact.isCustomer ? "customer" : "lead",
+        updatedAt: new Date(),
+      };
+      const [existingPerson] = await db
+        .select({ id: contacts.id })
+        .from(contacts)
+        .where(
+          and(
+            eq(contacts.workspaceId, workspaceId),
+            eq(contacts.externalContactId, contact.externalId),
+          ),
+        );
+      if (existingPerson) {
+        await db.update(contacts).set(person).where(eq(contacts.id, existingPerson.id));
+      } else {
+        await db.insert(contacts).values({
+          ...person,
           workspaceId,
-          name: contact.name,
           externalContactId: contact.externalId,
-          lifecycleStage: contact.isCustomer ? "customer" : "lead",
-          source: connection.providerLabel,
-        })
-        .returning({ id: companies.id });
-      companyIdByExternal.set(contact.externalId, created.id);
-      companiesCreated++;
+          lastActivityAt: new Date(),
+        });
+        peopleCreated++;
+      }
     }
   }
 
@@ -296,7 +359,11 @@ export async function runSync(workspaceId: string): Promise<void> {
       .where(eq(companies.id, companyId));
   }
 
-  const summary = `${contacts.length} contacts read (${companiesCreated} new companies), ${invoicesMirrored} open invoices mirrored.`;
+  const summary =
+    `${pulledContacts.length - suppliersSkipped} customers read ` +
+    `(${companiesCreated} new companies, ${peopleCreated} new people` +
+    `${suppliersSkipped ? `, ${suppliersSkipped} suppliers skipped` : ""}), ` +
+    `${invoicesMirrored} open invoices mirrored.`;
   await db
     .update(connections)
     .set({ lastSyncAt: new Date(), lastSyncSummary: summary, lastSyncError: null })
