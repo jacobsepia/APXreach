@@ -119,7 +119,9 @@
 .deal strong { font-size:14px; color:#77538c; }
 .deal p { font-size:11px; color:#a68db6; margin:4px 0 0; }
 .textButton { display:inline-flex; gap:5px; align-items:center; padding:0; border:0; background:none; font-size:12px; color:#956ab3; }
-.compose { min-width:0; }
+.composeContent { display:flex; flex-direction:column; overflow:hidden; padding-bottom:12px; }
+.composeContent > .loading, .composeContent > .error, .composeContent > .success { flex-shrink:0; }
+.compose { min-width:0; min-height:0; flex:1; display:flex; flex-direction:column; }
 .composeToolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:8px 10px; margin-bottom:10px; border:1px solid #e8dff0; border-radius:11px; background:linear-gradient(100deg,#faf6fe,#fff); }
 .composeTitle { display:flex; align-items:center; gap:8px; flex-shrink:0; }
 .composeTitle h3 { display:flex; align-items:center; gap:6px; margin:0 3px 0 0; font-size:12px; font-weight:650; color:#613a7a; white-space:nowrap; }
@@ -133,17 +135,38 @@
 .addressText { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#7a6488; }
 .addressText strong { color:#68427e; font-weight:600; }
 .recipientAddress { color:#957ea4; }
-.composeForm { border:1px solid #e2d6ec; border-radius:11px; background:#fff; overflow:hidden; box-shadow:0 5px 24px #4e226609; }
+.composeForm { display:flex; flex-direction:column; flex:1; min-height:0; border:1px solid #e2d6ec; border-radius:11px; background:#fff; overflow:hidden; box-shadow:0 5px 24px #4e226609; }
+.composeToolbar, .subjectField, .composeFooter, .formatToolbar { flex-shrink:0; }
+.composeForm > .error { flex-shrink:0; margin:0; border-radius:0; }
 .provider { display:inline-flex; align-items:center; flex-shrink:0; gap:5px; margin-left:auto; font-size:9px; color:#789155; background:#f0f5e9; border:1px solid #e3ebd7; border-radius:999px; padding:4px 8px; white-space:nowrap; }
 .provider > span { width:5px; height:5px; border-radius:50%; background:#9abb6b; }
 .subjectField { display:flex; align-items:center; gap:10px; padding:9px 16px; border-bottom:1px solid #f1eaf6; font-size:12px; }
 .subjectField > span { color:#ab96ba; width:55px; flex-shrink:0; }
 .subjectField input { flex:1; min-width:0; padding:4px 0; color:#654772; background:none; border:0; outline:none; }
 .subjectField:focus-within { box-shadow:inset 3px 0 #b088cb; }
-.subjectField input::placeholder, .bodyField textarea::placeholder { color:#b09bbd; }
-.bodyField { display:block; }
-.bodyField textarea { display:block; width:100%; min-height:150px; resize:vertical; border:0; outline:none; padding:14px 16px; color:#5c4767; background:#fff; font:13px/1.65 var(--font-inter),sans-serif; height:clamp(150px, 24dvh, 260px); }
-.bodyField textarea:focus-visible { box-shadow:inset 3px 0 #b088cb; }
+.subjectField input::placeholder { color:#b09bbd; }
+.richEditor { display:flex; flex-direction:column; flex:1; min-height:0; }
+.formatToolbar { display:flex; align-items:center; flex-wrap:wrap; gap:3px; padding:6px 12px; border-bottom:1px solid #eee7f4; background:#fcfaff; }
+.formatToolbar select { max-width:140px; height:28px; border:1px solid #e8dfee; border-radius:6px; background:#fff; color:#755b84; font-size:11px; padding:0 6px; }
+.formatToolbar button { display:grid; place-items:center; width:28px; height:28px; padding:0; border:1px solid transparent; border-radius:6px; background:none; color:#8f759f; }
+.formatToolbar button:hover { background:#f0e8f7; }
+.formatToolbar button[aria-pressed=true] { background:#eadcf4; border-color:#d9c4e8; color:#713c92; }
+.formatToolbar select:focus-visible { outline:2px solid #b48acc; outline-offset:2px; }
+.formatDivider { height:17px; width:1px; background:#e6dced; margin:0 3px; }
+.editorSurface { position:relative; display:flex; flex:1; min-height:80px; overflow:auto; background:#fff; }
+.editorMount { display:flex; flex-direction:column; flex:1; min-width:0; }
+.richInput { flex:1; padding:16px 18px; min-height:100%; outline:none; font:14px/1.6 Arial,sans-serif; color:#302b36; overflow-wrap:anywhere; white-space:pre-wrap; }
+.editorSurface:focus-within { box-shadow:inset 3px 0 #b088cb; }
+.richInput p, .richHistory p { margin:0 0 .7em; }
+.richInput p:last-child, .richHistory p:last-child { margin-bottom:0; }
+.richInput ul, .richHistory ul { list-style:disc; padding-left:24px; margin:.5em 0; }
+.richInput ol, .richHistory ol { list-style:decimal; padding-left:24px; margin:.5em 0; }
+.richInput li p, .richHistory li p { margin:0; }
+.richInput blockquote, .richHistory blockquote { border-left:3px solid #ddcce8; padding-left:14px; margin:10px 0; }
+.richInput a, .richHistory a { color:#743f98; text-decoration:underline; }
+.richHistory { white-space:normal; font-family:Arial,sans-serif; line-height:1.6; color:#302b36; }
+.editorPlaceholder { position:absolute; top:16px; left:18px; color:#b09bbd; pointer-events:none; font:14px/1.6 Arial,sans-serif; }
+.editorLoading { flex:1; min-height:80px; padding:16px 18px; color:#9b84aa; font-size:12px; }
 .composeFooter { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 14px; border-top:1px solid #eee6f4; background:#fdfbff; }
 .composeFooter > span { display:flex; gap:6px; align-items:center; font-size:10px; color:#a78cb8; }
 .loading, .error, .success { display:flex; align-items:center; gap:9px; padding:9px 12px; border-radius:10px; font-size:12px; margin-bottom:12px; }
@@ -186,6 +209,10 @@
   .historyTools { margin-bottom:10px; }
 }
 @media (max-width:760px) {
+  .composeContent { overflow:visible; flex:none; }
+  .composeForm { flex:none; min-height:450px; }
+  .richEditor { min-height:300px; }
+  .formatToolbar { padding:6px 8px; }
   .composeToolbar { gap:7px; padding:8px; }
   .composeTitle { order:0; }
   .composeToolbar .provider { order:1; }

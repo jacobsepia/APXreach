@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDownLeft, ArrowUpRight, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, Clock3, FileText, Inbox, LoaderCircle, Mail, MessageSquareText, Phone, Search, Send, StickyNote, UserRound, X } from "lucide-react";
@@ -9,6 +10,8 @@ import { sendEmailFromRecord } from "@/lib/actions";
 import { money, relativeDay, shortDate } from "@/lib/format";
 import { StagePill } from "@/components/ui";
 import styles from "./contact-record-modal.module.css";
+
+const EmailEditor = dynamic(() => import("./email-editor"), { ssr: false, loading: () => <div className={styles.editorLoading}>Loading editor…</div> });
 
 type ContactRecord = {
   id: string; firstName: string; lastName: string; email: string | null;
@@ -44,7 +47,7 @@ function MessageCard({ message }: { message: Message }) {
           <dt>From</dt><dd>{message.fromAddress}</dd>
           <dt>To</dt><dd>{message.toAddress}</dd>
         </dl>
-        <div className={styles.emailBody}>{message.bodyText || "No plain-text message content is available."}</div>
+        {message.bodyHtml ? <div className={`${styles.emailBody} ${styles.richHistory}`} dangerouslySetInnerHTML={{ __html: message.bodyHtml }} /> : <div className={styles.emailBody}>{message.bodyText || "No message content is available."}</div>}
         <div className={styles.messageFoot}><CheckCircle2 size={13} /> {outbound ? "Sent through your connected mailbox" : "Received in your connected mailbox"}</div>
       </div>
     </details>
@@ -61,6 +64,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [bodyHtml, setBodyHtml] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -116,9 +120,10 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
     form.set("to", contact.email);
     form.set("subject", subject);
     form.set("body", body);
+    form.set("bodyHtml", bodyHtml);
     try {
       await sendEmailFromRecord(form);
-      setSubject(""); setBody(""); setQuery("");
+      setSubject(""); setBody(""); setBodyHtml(""); setQuery("");
       setView("emails");
       setNotice("Email sent from " + data.mailbox.emailAddress + ".");
       refresh();
@@ -162,7 +167,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
             {confirmClose && <div className={styles.discardBar} role="alert">
               <span>You have an unsent draft. Discard it and close?</span>
               <button type="button" className={styles.secondaryButton} onClick={() => { setConfirmClose(false); setView("compose"); }}>Keep writing</button>
-              <button type="button" className={styles.textButton} onClick={() => { setSubject(""); setBody(""); setConfirmClose(false); setOpen(false); }}>Discard draft</button>
+              <button type="button" className={styles.textButton} onClick={() => { setSubject(""); setBody(""); setBodyHtml(""); setConfirmClose(false); setOpen(false); }}>Discard draft</button>
             </div>}
 
             <div className={styles.workspace}>
@@ -200,7 +205,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
                   <span className={styles.mailboxStatus}>{data?.mailbox && <><span />Mailbox connected</>}</span>
                 </nav>
 
-                <div className={styles.content}>
+                <div className={`${styles.content} ${view === "compose" ? styles.composeContent : ""}`}>
                   {notice && <div role="status" className={styles.success}><CheckCircle2 size={17} />{notice}</div>}
                   {error && <div role="alert" className={styles.error}>{error}<button type="button" onClick={refresh}>Retry</button></div>}
                   {loading && <div role="status" className={styles.loading}><LoaderCircle size={16} className={styles.spin} />{data ? "Refreshing history…" : "Loading your contact's history…"}</div>}
@@ -225,7 +230,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
                       {!data ? (!loading && !error && <p className={styles.muted}>Load the contact to check your mailbox.</p>) : !data.mailbox ? <div className={styles.empty}><Mail size={30} /><h4>Connect your mailbox</h4><p>A connected mailbox is needed to send from Reach.</p><Link href="/settings" className={styles.primaryButton}>Open Settings</Link></div> : !contact.email ? <div className={styles.empty}><h4>No email address yet</h4><p>Add an email address using the contact's edit control.</p></div> : (
                         <form onSubmit={send} className={styles.composeForm}>
                           <label className={styles.subjectField}><span>Subject</span><input name="subject" aria-label="Subject" placeholder="Give your email a subject" value={subject} onChange={(event) => setSubject(event.target.value)} required disabled={sending} maxLength={998} autoFocus /></label>
-                          <label className={styles.bodyField}><span className={styles.srOnly}>Message</span><textarea name="body" aria-label="Message" placeholder={"Hi " + contact.firstName + ",\n\n"} value={body} onChange={(event) => setBody(event.target.value)} required disabled={sending} rows={11} /></label>
+                          <EmailEditor value={bodyHtml} disabled={sending} firstName={contact.firstName} onChange={(html, text) => { setBodyHtml(html); setBody(text); }} />
                           {sendError && <div role="alert" className={styles.error}>{sendError}</div>}
                           <div className={styles.composeFooter}><span><CheckCircle2 size={14} />Saved to this contact's history after sending</span><button type="submit" disabled={sending || !subject.trim() || !body.trim()} className={styles.primaryButton}>{sending ? <LoaderCircle size={16} className={styles.spin} /> : <Send size={16} />}{sending ? "Sending…" : "Send email"}</button></div>
                         </form>

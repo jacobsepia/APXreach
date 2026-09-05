@@ -5,6 +5,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { requireTenantOrThrow } from "@/lib/workspace";
+import { sanitizeEmailHtml } from "@/lib/email-content";
 import { activities, contacts, db, deals, emailMessages, mailboxes, pipelineStages } from "@/db";
 
 /** Read this member’s contact and its history only when the modal opens. */
@@ -33,7 +34,7 @@ export async function loadContactRecord(rawId: string) {
     db.select({
       id: emailMessages.id, direction: emailMessages.direction,
       fromAddress: emailMessages.fromAddress, toAddress: emailMessages.toAddress,
-      subject: emailMessages.subject, bodyText: emailMessages.bodyText,
+      subject: emailMessages.subject, bodyText: emailMessages.bodyText, bodyHtml: emailMessages.bodyHtml,
       sentAt: emailMessages.sentAt,
     }).from(emailMessages)
       .where(and(eq(emailMessages.contactId, id), eq(emailMessages.workspaceId, workspaceId)))
@@ -43,5 +44,5 @@ export async function loadContactRecord(rawId: string) {
       .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.workspaceId, workspaceId), eq(mailboxes.status, "connected")))
       .limit(1),
   ]);
-  return { activities: history, deals: associatedDeals, messages, mailbox: connectedMailboxes[0] ?? null };
+  return { activities: history, deals: associatedDeals, messages: messages.map(message => ({ ...message, bodyHtml: message.bodyHtml ? sanitizeEmailHtml(message.bodyHtml) : null })), mailbox: connectedMailboxes[0] ?? null };
 }

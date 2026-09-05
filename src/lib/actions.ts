@@ -25,6 +25,7 @@ import { runSync } from "@/lib/sync";
 import { getProvider } from "@/lib/providers";
 import { getMailboxProvider } from "@/lib/mailbox/providers";
 import { sendFromMailbox } from "@/lib/mailbox/send";
+import { prepareEmailBody } from "@/lib/email-content";
 import { clientCredentials, revokeToken } from "@/lib/oauth";
 
 /** Every mutation resolves membership on the server, never from form fields. */
@@ -471,7 +472,7 @@ export async function sendEmailFromRecord(formData: FormData): Promise<void> {
     .email("That doesn't look like an email address.")
     .parse(formData.get("to"));
   const subject = trimmed.min(1, "Give it a subject.").parse(formData.get("subject"));
-  const text = trimmed.min(1, "Write something first.").parse(formData.get("body"));
+  const { text, html } = prepareEmailBody(z.string().parse(formData.get("body")), z.string().optional().parse(formData.get("bodyHtml") ?? undefined));
 
   const [mailbox] = await db
     .select()
@@ -491,7 +492,7 @@ export async function sendEmailFromRecord(formData: FormData): Promise<void> {
     if (!company) throw new Error("That company is no longer here.");
   }
 
-  const sent = await sendFromMailbox(mailbox, { to, subject, text });
+  const sent = await sendFromMailbox(mailbox, { to, subject, text, html });
   if (!sent.ok) throw new Error(sent.error);
 
   await db.insert(emailMessages).values({
@@ -504,6 +505,7 @@ export async function sendEmailFromRecord(formData: FormData): Promise<void> {
     toAddress: to,
     subject,
     bodyText: text,
+    bodyHtml: html ?? null,
     providerMessageId: sent.value.providerMessageId,
   });
 
