@@ -178,6 +178,33 @@ export const mailboxes = pgTable("mailboxes", {
 });
 
 /*
+ * Every email that went through Reach, in either direction. The timeline gets
+ * a one-line activity for each; this holds the message itself — the body, who
+ * sent it, and the provider's id so a reply can be matched back to what it
+ * answers. Bodies are kept because a follow-up needs the thread, and the
+ * mailbox is the person's own: nothing here is Reach's to lose.
+ */
+export const emailMessages = pgTable("email_messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
+  mailboxId: uuid("mailbox_id").references(() => mailboxes.id),
+  companyId: uuid("company_id").references(() => companies.id),
+  contactId: uuid("contact_id").references(() => contacts.id),
+  direction: text("direction").notNull(), // outbound | inbound
+  fromAddress: text("from_address").notNull(),
+  toAddress: text("to_address").notNull(),
+  subject: text("subject").notNull(),
+  bodyText: text("body_text").notNull(),
+  bodyHtml: text("body_html"),
+  /** The provider's id for the message, where it gave one. Graph gives none. */
+  providerMessageId: text("provider_message_id"),
+  /** The outbound message this one answers, for threading in the Inbox. */
+  inReplyToId: uuid("in_reply_to_id"),
+  sentAt: timestamp("sent_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/*
  * A books connection — provider-shaped, the way Collect holds its Xero and
  * QuickBooks connections. APX Ledger is provider #1; the provider column is
  * what keeps Reach from ever being hard-wired to one system.

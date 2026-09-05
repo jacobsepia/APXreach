@@ -13,6 +13,7 @@ import {
   db,
   deals,
   connections,
+  emailMessages,
   mailboxes,
   pipelineStages,
   syncedInvoices,
@@ -21,6 +22,7 @@ import {
 import { runSync } from "@/lib/sync";
 import { getProvider } from "@/lib/providers";
 import { getMailboxProvider } from "@/lib/mailbox/providers";
+import { sendFromMailbox } from "@/lib/mailbox/send";
 import { clientCredentials, revokeToken } from "@/lib/oauth";
 
 /*
@@ -263,6 +265,7 @@ export async function deleteCompany(formData: FormData): Promise<void> {
   await db.update(contacts).set({ companyId: null }).where(eq(contacts.companyId, id));
   await db.update(deals).set({ companyId: null }).where(eq(deals.companyId, id));
   await db.update(activities).set({ companyId: null }).where(eq(activities.companyId, id));
+  await db.update(emailMessages).set({ companyId: null }).where(eq(emailMessages.companyId, id));
   /* The invoice mirror is a cache keyed to the company; it has nowhere to go. */
   await db.delete(syncedInvoices).where(eq(syncedInvoices.companyId, id));
   await db.delete(companies).where(and(eq(companies.id, id), eq(companies.workspaceId, wsId)));
@@ -309,6 +312,7 @@ export async function deleteContact(formData: FormData): Promise<void> {
 
   await db.update(deals).set({ contactId: null }).where(eq(deals.contactId, id));
   await db.update(activities).set({ contactId: null }).where(eq(activities.contactId, id));
+  await db.update(emailMessages).set({ contactId: null }).where(eq(emailMessages.contactId, id));
   await db.delete(contacts).where(and(eq(contacts.id, id), eq(contacts.workspaceId, wsId)));
 
   revalidatePath("/contacts");
@@ -443,8 +447,91 @@ export async function disconnectMailbox(formData: FormData): Promise<void> {
   /* The row goes rather than being marked disconnected: it exists to hold
      tokens, and keeping a dead one only invites sending as an address whose
      grant is gone. */
+  /* The messages it sent stay on the record; only their link to the grant goes. */
+  await db.update(emailMessages).set({ mailboxId: null }).where(eq(emailMessages.mailboxId, mailbox.id));
   await db.delete(mailboxes).where(eq(mailboxes.id, mailbox.id));
   revalidatePath("/settings");
+}
+
+/*
+ * Send an email from a record, as the signed-in person, through the mailbox
+ * they connected. Recorded twice on purpose: the message itself in
+ * email_messages, where a reply can be matched back to it, and a one-line
+ * activity on the timeline, which is where a person looks.
+ *
+ * Failures throw with the provider's reason. The compose dialog catches and
+ * shows it, so "Zoho refused the address" reaches the person who typed it
+ * rather than being flattened into "something went wrong".
+ */
+export async function sendEmailFromRecord(formData: FormData): Promise<void> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) throw new Error("Not signed in.");
+  const wsId = await workspaceId();
+
+  const companyId = optionalText.parse(formData.get("companyId") ?? "");
+  const contactId = optionalText.parse(formData.get("contactId") ?? "");
+  const to = z
+    .string()
+    .trim()
+    .email("That doesn't look like an email address.")
+    .parse(formData.get("to"));
+  const subject = trimmed.min(1, "Give it a subject.").parse(formData.get("subject"));
+  const text = trimmed.min(1, "Write something first.").parse(formData.get("body"));
+
+  const [mailbox] = await db
+    .select()
+    .from(mailboxes)
+    .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.status, "connected")))
+    .limit(1);
+  if (!mailbox) {
+    throw new Error("Connect a mailbox in Settings first — Reach sends as you, not as itself.");
+  }
+
+  /* A company named on the form must be one of ours; a stray id is refused. */
+  if (companyId) {
+    const [company] = await db
+      .select({ id: companies.id })
+      .from(companies)
+      .where(and(eq(companies.id, companyId), eq(companies.workspaceId, wsId)));
+    if (!company) throw new Error("That company is no longer here.");
+  }
+
+  const sent = await sendFromMailbox(mailbox, { to, subject, text });
+  if (!sent.ok) throw new Error(sent.error);
+
+  await db.insert(emailMessages).values({
+    workspaceId: wsId,
+    mailboxId: mailbox.id,
+    companyId: companyId || null,
+    contactId: contactId || null,
+    direction: "outbound",
+    fromAddress: mailbox.emailAddress,
+    toAddress: to,
+    subject,
+    bodyText: text,
+    providerMessageId: sent.value.providerMessageId,
+  });
+
+  await db.insert(activities).values({
+    workspaceId: wsId,
+    type: "email",
+    subject: `Email sent — ${subject}`,
+    body: `To ${to}\n\n${text}`,
+    companyId: companyId || null,
+    contactId: contactId || null,
+    actorName: session.user.name ?? mailbox.emailAddress,
+    occurredAt: new Date(),
+  });
+
+  if (contactId) {
+    await db
+      .update(contacts)
+      .set({ lastActivityAt: new Date() })
+      .where(and(eq(contacts.id, contactId), eq(contacts.workspaceId, wsId)));
+  }
+
+  if (companyId) revalidatePath(`/companies/${companyId}`);
+  revalidatePath("/contacts");
 }
 
 export async function syncNow(): Promise<void> {
