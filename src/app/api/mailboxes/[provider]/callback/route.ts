@@ -106,6 +106,7 @@ export async function GET(
     providerLabel: provider.label,
     emailAddress: identity.value.email,
     displayName: identity.value.displayName,
+    providerAccountId: identity.value.providerAccountId ?? null,
     accessToken: tokens.value.accessToken,
     refreshToken: tokens.value.refreshToken,
     tokenExpiresAt: tokens.value.expiresAt,

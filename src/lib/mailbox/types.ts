@@ -24,6 +24,27 @@ export interface MailboxIdentity {
   /** The address mail will be sent from and replies read out of. */
   email: string;
   displayName: string | null;
+  /**
+   * The provider's own handle for this mailbox, where it needs one. Zoho
+   * addresses its send endpoint by account id rather than by address, so
+   * without this every send would cost an extra round trip to look it up.
+   */
+  providerAccountId?: string | null;
+}
+
+export interface OutgoingMail {
+  to: string;
+  subject: string;
+  /** Plain text always; HTML is what the recipient sees when their client can. */
+  text: string;
+  html?: string;
+  /** Threads a reply onto the message it answers, where the provider can. */
+  inReplyTo?: string | null;
+}
+
+export interface SentMail {
+  /** The provider's message id, so the reply can be matched back to it. */
+  providerMessageId: string | null;
 }
 
 export interface MailboxProvider {
@@ -38,4 +59,15 @@ export interface MailboxProvider {
    * being typed in by hand and got wrong.
    */
   identify(accessToken: string): Promise<ProviderResult<MailboxIdentity>>;
+  /**
+   * Send as this mailbox. Returns a result rather than throwing: a refused
+   * send is not an exception in the CRM sense — the contact still exists and
+   * the timeline is untouched — and the person who pressed Send needs to know
+   * WHAT was refused, which a thrown error flattens into "something failed".
+   */
+  send(
+    accessToken: string,
+    mailbox: { emailAddress: string; displayName: string | null; providerAccountId: string | null },
+    mail: OutgoingMail,
+  ): Promise<ProviderResult<SentMail>>;
 }

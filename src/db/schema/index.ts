@@ -163,6 +163,8 @@ export const mailboxes = pgTable("mailboxes", {
   /** Where mail goes out from, as the provider reported it — never typed in. */
   emailAddress: text("email_address").notNull(),
   displayName: text("display_name"),
+  /** The provider's own handle for the mailbox — Zoho sends by account id. */
+  providerAccountId: text("provider_account_id"),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
   tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
