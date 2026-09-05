@@ -56,6 +56,32 @@ export interface ProviderOAuth {
   /** Env var names holding this client's registered credentials. */
   clientIdEnv: string;
   clientSecretEnv: string;
+  /**
+   * PKCE, on unless a provider refuses it. Ledger requires S256; Google,
+   * Microsoft and Zoho all accept it on the server-side flow, and there is no
+   * reason to hand a code through a browser without it.
+   */
+  pkce?: boolean;
+  /**
+   * Whatever else a provider wants on the authorize URL. This is where the
+   * three disagree loudly: Google wants access_type=offline with
+   * prompt=consent or it silently withholds the refresh token on every
+   * authorization after the first, and Microsoft wants offline_access as a
+   * scope instead. Getting this wrong looks fine for an hour and then the
+   * connection dies with no way to renew it.
+   */
+  extraAuthorizeParams?: Record<string, string>;
+}
+
+/**
+ * The shape the OAuth ceremony actually needs. Books providers and mailbox
+ * providers are different things that authorize identically, so the ceremony
+ * asks for this rather than for either of them.
+ */
+export interface OAuthClientLike {
+  id: string;
+  label: string;
+  oauth?: ProviderOAuth;
 }
 
 export interface OAuthTokens {

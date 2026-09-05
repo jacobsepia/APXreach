@@ -21,6 +21,7 @@ export function getProvider(id: string): AccountingProvider | undefined {
 
 export type {
   AccountingProvider,
+  OAuthClientLike,
   NormalizedContact,
   NormalizedInvoice,
   OAuthTokens,

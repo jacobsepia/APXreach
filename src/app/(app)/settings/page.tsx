@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { db, connections } from "@/db";
+import { headers } from "next/headers";
+import { and, eq } from "drizzle-orm";
+import { db, connections, mailboxes } from "@/db";
+import { auth } from "@/lib/auth";
+import { disconnectMailbox } from "@/lib/actions";
+import { configuredMailboxProviders } from "@/lib/mailbox/providers";
 import { comingSoon, providers } from "@/lib/providers";
 import { Card, Caps, LedgerDot, Pill } from "@/components/ui";
 import { DisconnectButton, SyncNowButton } from "@/components/connect-books";
@@ -18,10 +23,22 @@ const stamp = new Intl.DateTimeFormat("en-CA", {
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; connected?: string }>;
+  searchParams: Promise<{ error?: string; connected?: string; mailbox?: string }>;
 }) {
-  const { error, connected: justConnected } = await searchParams;
+  const { error, connected: justConnected, mailbox: justLinkedMailbox } = await searchParams;
+  const session = await auth.api.getSession({ headers: await headers() });
   const [connection] = await db.select().from(connections).limit(1);
+  /* A mailbox belongs to the person, so only theirs is shown or offered. */
+  const myMailboxes = session
+    ? await db
+        .select()
+        .from(mailboxes)
+        .where(
+          and(eq(mailboxes.userId, session.user.id), eq(mailboxes.status, "connected")),
+        )
+    : [];
+  const mailboxOptions = configuredMailboxProviders();
+  const connectedProviderIds = new Set(myMailboxes.map((m) => m.provider));
   const live = connection?.status === "connected" && Boolean(connection.accessToken);
   const demoOnly = connection?.status === "connected" && !connection.accessToken;
   const available = Object.values(providers);
@@ -41,6 +58,14 @@ export default async function SettingsPage({
       {error && (
         <Card className="border-[color-mix(in_srgb,var(--accent-hot)_35%,transparent)] px-[18px] py-3">
           <p className="text-[13px] font-medium text-[#b91c1c]">{error}</p>
+        </Card>
+      )}
+      {justLinkedMailbox && !error && (
+        <Card className="border-[color-mix(in_srgb,var(--accent-data)_45%,transparent)] px-[18px] py-3">
+          <p className="text-[13px] text-foreground">
+            Mailbox connected. Mail you send from a record will go out from your own
+            address.
+          </p>
         </Card>
       )}
       {justConnected && !error && (
@@ -127,6 +152,71 @@ export default async function SettingsPage({
           </Card>
         );
       })}
+
+      <Card className="px-[18px] py-4">
+        <div className="flex items-center justify-between">
+          <Caps>Your mailbox</Caps>
+          {myMailboxes.length > 0 ? (
+            <Pill kind="ledger">Connected</Pill>
+          ) : (
+            <Pill kind="customer">Not connected</Pill>
+          )}
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Mail to a contact goes out from your own address, so the reply lands in the
+          inbox you already watch and the thread reads normally to them. A mailbox is
+          yours alone — a colleague connects their own and sends as themselves.
+        </p>
+
+        {myMailboxes.map((box) => (
+          <div
+            key={box.id}
+            className="mt-3 flex items-center justify-between rounded-xl border border-border px-3.5 py-2.5"
+          >
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <LedgerDot />
+                <span className="truncate">{box.emailAddress}</span>
+                <Pill kind="ledger">{box.providerLabel}</Pill>
+              </div>
+              {box.lastError && (
+                <p className="mt-1 text-xs font-medium text-[#b91c1c]">{box.lastError}</p>
+              )}
+            </div>
+            <form action={disconnectMailbox}>
+              <input type="hidden" name="mailboxId" value={box.id} />
+              <button
+                type="submit"
+                className="flex h-8 items-center rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-muted-foreground hover:border-[var(--accent-hot)] hover:text-[#b91c1c]"
+              >
+                Disconnect
+              </button>
+            </form>
+          </div>
+        ))}
+
+        {mailboxOptions.length === 0 ? (
+          <p className="mt-3 text-xs leading-relaxed text-[var(--text-tertiary)]">
+            No mail provider is registered on this deployment yet. Set a client id and
+            secret for Zoho, Google or Microsoft and its button appears here.
+          </p>
+        ) : (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {mailboxOptions
+              .filter((p) => !connectedProviderIds.has(p.id))
+              .map((p) => (
+                <Link
+                  key={p.id}
+                  href={`/api/mailboxes/${p.id}/start`}
+                  prefetch={false}
+                  className="inline-flex h-9 items-center rounded-[10px] border border-input bg-white px-4 text-[13px] font-medium text-foreground hover:border-[#6b21a8]"
+                >
+                  Connect {p.label}
+                </Link>
+              ))}
+          </div>
+        )}
+      </Card>
 
       {comingSoon.map((p) => (
         <Card key={p.id} className="px-[18px] py-4">

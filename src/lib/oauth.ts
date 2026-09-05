@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import type { AccountingProvider, OAuthTokens, ProviderResult } from "@/lib/providers";
+import type { OAuthClientLike, OAuthTokens, ProviderResult } from "@/lib/providers";
 
 /*
  * Reach's side of the OAuth2 authorization-code flow — the ceremony every
@@ -54,7 +54,7 @@ export interface ClientCredentials {
  * provider issues a secret with edge whitespace in it.
  */
 export function clientCredentials(
-  provider: AccountingProvider,
+  provider: OAuthClientLike,
 ): ProviderResult<ClientCredentials> {
   if (!provider.oauth) {
     return { ok: false, error: `${provider.label} does not support connecting yet.` };
@@ -76,7 +76,7 @@ export function callbackUrl(origin: string, providerId: string): string {
 }
 
 export function authorizeUrl(params: {
-  provider: AccountingProvider;
+  provider: OAuthClientLike;
   clientId: string;
   redirectUri: string;
   state: string;
@@ -89,8 +89,13 @@ export function authorizeUrl(params: {
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("scope", provider.oauth!.scopes.join(" "));
   url.searchParams.set("state", state);
-  url.searchParams.set("code_challenge", challenge);
-  url.searchParams.set("code_challenge_method", "S256");
+  if (provider.oauth!.pkce !== false) {
+    url.searchParams.set("code_challenge", challenge);
+    url.searchParams.set("code_challenge_method", "S256");
+  }
+  for (const [key, value] of Object.entries(provider.oauth!.extraAuthorizeParams ?? {})) {
+    url.searchParams.set(key, value);
+  }
   return url.toString();
 }
 
@@ -155,7 +160,7 @@ type TokenAttempt =
   | { ok: false; error: string; clientRejected: boolean };
 
 async function attemptToken(
-  provider: AccountingProvider,
+  provider: OAuthClientLike,
   credentials: ClientCredentials,
   form: Record<string, string>,
   method: ClientAuthMethod,
@@ -247,7 +252,7 @@ async function attemptToken(
 
 /** Both grants answer the same way, so both parse the same way. */
 async function postToken(
-  provider: AccountingProvider,
+  provider: OAuthClientLike,
   credentials: ClientCredentials,
   form: Record<string, string>,
 ): Promise<ProviderResult<OAuthTokens>> {
@@ -283,7 +288,7 @@ async function postToken(
 }
 
 export async function exchangeCode(params: {
-  provider: AccountingProvider;
+  provider: OAuthClientLike;
   credentials: ClientCredentials;
   code: string;
   redirectUri: string;
@@ -298,7 +303,7 @@ export async function exchangeCode(params: {
 }
 
 export async function refreshTokens(params: {
-  provider: AccountingProvider;
+  provider: OAuthClientLike;
   credentials: ClientCredentials;
   refreshToken: string;
 }): Promise<ProviderResult<OAuthTokens>> {
@@ -314,7 +319,7 @@ export async function refreshTokens(params: {
  * on the provider's side is theirs to clear from Ledger's own screen.
  */
 export async function revokeToken(params: {
-  provider: AccountingProvider;
+  provider: OAuthClientLike;
   credentials: ClientCredentials;
   token: string;
 }): Promise<boolean> {

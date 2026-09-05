@@ -146,6 +146,36 @@ export const syncedInvoices = pgTable("synced_invoices", {
 });
 
 /*
+ * A person's connected mailbox — Zoho, Gmail or Outlook.
+ *
+ * Keyed by USER, not workspace: mail is sent as a person, from the address
+ * their clients already recognise, so two colleagues hold two mailboxes and
+ * neither sends as the other. That is also why the tokens live here rather
+ * than on `connections`, which is the workspace's shared link to the books.
+ */
+export const mailboxes = pgTable("mailboxes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
+  /** Better Auth's user id. Text, because that table is not ours to reshape. */
+  userId: text("user_id").notNull(),
+  provider: text("provider").notNull(), // zoho | google | microsoft
+  providerLabel: text("provider_label").notNull(),
+  /** Where mail goes out from, as the provider reported it — never typed in. */
+  emailAddress: text("email_address").notNull(),
+  displayName: text("display_name"),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+  scopes: text("scopes"),
+  status: text("status").default("connected").notNull(), // connected | disconnected
+  /** How far the reply poll has read. Providers disagree on shape, so: text. */
+  syncCursor: text("sync_cursor"),
+  lastPolledAt: timestamp("last_polled_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/*
  * A books connection — provider-shaped, the way Collect holds its Xero and
  * QuickBooks connections. APX Ledger is provider #1; the provider column is
  * what keeps Reach from ever being hard-wired to one system.

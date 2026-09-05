@@ -13,12 +13,14 @@ import {
   db,
   deals,
   connections,
+  mailboxes,
   pipelineStages,
   syncedInvoices,
   workspaces,
 } from "@/db";
 import { runSync } from "@/lib/sync";
 import { getProvider } from "@/lib/providers";
+import { getMailboxProvider } from "@/lib/mailbox/providers";
 import { clientCredentials, revokeToken } from "@/lib/oauth";
 
 /*
@@ -411,6 +413,38 @@ export async function deleteTask(formData: FormData): Promise<void> {
   assertTouched(touched, "task");
   revalidatePath("/tasks");
   revalidatePath("/dashboard");
+}
+
+/*
+ * Letting go of a mailbox. Scoped to the person who owns it — a mailbox is
+ * one colleague's account, and no one else in the workspace gets to hand it
+ * back on their behalf.
+ */
+export async function disconnectMailbox(formData: FormData): Promise<void> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) throw new Error("Not signed in.");
+  const id = trimmed.min(1).parse(formData.get("mailboxId"));
+
+  const [mailbox] = await db
+    .select()
+    .from(mailboxes)
+    .where(and(eq(mailboxes.id, id), eq(mailboxes.userId, session.user.id)));
+  if (!mailbox) throw new Error("That mailbox is not yours to disconnect.");
+
+  const provider = getMailboxProvider(mailbox.provider);
+  const token = mailbox.refreshToken ?? mailbox.accessToken;
+  if (provider?.oauth.revokeUrl && token) {
+    const credentials = clientCredentials(provider);
+    if (credentials.ok) {
+      await revokeToken({ provider, credentials: credentials.value, token });
+    }
+  }
+
+  /* The row goes rather than being marked disconnected: it exists to hold
+     tokens, and keeping a dead one only invites sending as an address whose
+     grant is gone. */
+  await db.delete(mailboxes).where(eq(mailboxes.id, mailbox.id));
+  revalidatePath("/settings");
 }
 
 export async function syncNow(): Promise<void> {
