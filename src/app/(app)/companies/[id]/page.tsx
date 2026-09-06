@@ -14,6 +14,9 @@ import {
 } from "@/db";
 import { QuickCreate } from "@/components/quick-create";
 import { LogCall } from "@/components/log-call";
+import { EnrollSequence } from "@/components/enroll-sequence";
+import { workspaceTemplates } from "@/lib/email-template-store";
+import { activeEnrollmentsForInvoices, workspaceSequences } from "@/lib/sequences/store";
 import { daysBetween, money, monthYear, shortDate } from "@/lib/format";
 import { Avatar, Card, Caps, LedgerDot, Pill } from "@/components/ui";
 import { TimelineComposer } from "@/components/timeline-composer";
@@ -88,7 +91,7 @@ export default async function CompanyPage({
     .where(and(eq(companies.id, id), eq(companies.workspaceId, workspaceId)));
   if (!company) notFound();
 
-  const [people, openDeals, timeline, invoices, [connection], stages] = await Promise.all([
+  const [people, openDeals, timeline, invoices, [connection], stages, sequences, templates] = await Promise.all([
     db.select().from(contacts).where(and(eq(contacts.companyId, id), eq(contacts.workspaceId, workspaceId))),
     db
       .select({
@@ -123,7 +126,21 @@ export default async function CompanyPage({
       .innerJoin(pipelines, eq(pipelineStages.pipelineId, pipelines.id))
       .where(eq(pipelines.workspaceId, workspaceId))
       .orderBy(pipelines.displayOrder, pipelineStages.displayOrder),
+    workspaceSequences(workspaceId),
+    workspaceTemplates(workspaceId),
   ]);
+
+  /* Which open invoices already have a reminder series running. */
+  const reminders = await activeEnrollmentsForInvoices(workspaceId, invoices.map((inv) => inv.number));
+  const collections = sequences
+    .filter((sequence) => sequence.kind === "collections")
+    .map((sequence) => ({
+      id: sequence.id, name: sequence.name, kind: sequence.kind, description: sequence.description, stepCount: sequence.steps.length,
+      needsInvoice: sequence.steps.some((step) => templates.find((t) => t.key === step.templateKey)?.invoiceMode !== "none"),
+    }));
+  const enrollContacts = people.map((p) => ({ id: p.id, name: `${p.firstName} ${p.lastName}`.replace(/ —$/, "").trim(), email: p.email, companyId: p.companyId, companyName: company.name }));
+  const enrollInvoices = invoices.map((inv) => ({ number: inv.number, companyId: inv.companyId, dueDate: inv.dueDate, outstanding: money(inv.outstandingCents) }));
+  const reminderStamp = new Intl.DateTimeFormat("en-CA", { month: "short", day: "numeric" });
 
   const synced = company.lifecycleStage === "customer";
   const bookLabel = connection?.providerLabel ?? "the books";
@@ -392,6 +409,30 @@ export default async function CompanyPage({
                             Due in {Math.max(0, -overdueDays)} days
                           </div>
                         )}
+                        {(() => {
+                          const running = reminders.find((r) => r.invoiceNumber === inv.number);
+                          if (running) {
+                            return (
+                              <div className="mt-1 text-[11px] text-[var(--accent-primary)]" title={`${running.sequenceName} · ${running.contactFirst} ${running.contactLast}`}>
+                                Reminders running · {running.sentCount} sent{running.nextDueAt ? ` · next ${reminderStamp.format(running.nextDueAt)}` : ""}
+                              </div>
+                            );
+                          }
+                          const suggested = collections.find((s) => (inv.status === "overdue" ? s.name.toLowerCase().includes("overdue") : s.name.toLowerCase().includes("coming due"))) ?? collections[0];
+                          if (!suggested || !enrollContacts.some((c) => c.email)) return null;
+                          return (
+                            <div className="mt-1 flex justify-end">
+                              <EnrollSequence
+                                contacts={enrollContacts}
+                                sequences={collections}
+                                invoices={enrollInvoices}
+                                defaults={{ invoiceNumber: inv.number, sequenceId: suggested.id }}
+                                buttonLabel="Remind automatically"
+                                className="flex h-6 items-center gap-1 rounded-[8px] border border-input bg-white px-2 text-[11px] font-medium text-foreground hover:border-[#6b21a8] disabled:opacity-50"
+                              />
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   );

@@ -1,4 +1,5 @@
 import {
+  boolean,
   date,
   integer,
   jsonb,
@@ -271,4 +272,54 @@ export const connections = pgTable("connections", {
   lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
   lastSyncSummary: text("last_sync_summary"),
   lastSyncError: text("last_sync_error"),
+});
+
+/*
+ * Sequences: a series of emails sent on a schedule from a person's own
+ * mailbox, and the rule that makes them safe to automate — the series stops
+ * on its own when the books say the invoice is paid, or when the customer
+ * writes back. Nothing is ever sent to someone who was not enrolled by hand.
+ */
+export const sequences = pgTable("sequences", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
+  /** The starter this came from, so a workspace is seeded once and not again. */
+  key: text("key"),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  kind: text("kind").default("collections").notNull(), // collections | relationship
+  stopWhenPaid: boolean("stop_when_paid").default(true).notNull(),
+  stopOnReply: boolean("stop_on_reply").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const sequenceSteps = pgTable("sequence_steps", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sequenceId: uuid("sequence_id").references(() => sequences.id).notNull(),
+  position: integer("position").notNull(),
+  /** Days after enrolment. Day 0 goes out the moment someone is enrolled. */
+  dayOffset: integer("day_offset").notNull(),
+  templateKey: text("template_key").notNull(),
+});
+
+export const sequenceEnrollments = pgTable("sequence_enrollments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
+  sequenceId: uuid("sequence_id").references(() => sequences.id).notNull(),
+  contactId: uuid("contact_id").references(() => contacts.id).notNull(),
+  companyId: uuid("company_id").references(() => companies.id),
+  /** Whose mailbox the emails leave from — the person who enrolled them. */
+  mailboxId: uuid("mailbox_id").references(() => mailboxes.id).notNull(),
+  userId: text("user_id").notNull(),
+  /** The invoice being chased, when there is one; what "paid" is checked against. */
+  invoiceNumber: text("invoice_number"),
+  status: text("status").default("active").notNull(), // active | completed | stopped
+  stopReason: text("stop_reason"),
+  nextPosition: integer("next_position").default(0).notNull(),
+  nextDueAt: timestamp("next_due_at", { withTimezone: true }),
+  sentCount: integer("sent_count").default(0).notNull(),
+  lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
 });
