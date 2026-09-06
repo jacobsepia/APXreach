@@ -14,6 +14,7 @@ import {
 import { daysBetween, money, monthYear, shortDate } from "@/lib/format";
 import { Avatar, Card, Caps, LedgerDot, Pill } from "@/components/ui";
 import { TimelineComposer } from "@/components/timeline-composer";
+import { requireTenant } from "@/lib/workspace";
 import {
   AlertTriangle,
   Banknote,
@@ -74,7 +75,13 @@ export default async function CompanyPage({
 }) {
   const { id } = await params;
 
-  const [company] = await db.select().from(companies).where(eq(companies.id, id));
+  const { workspaceId } = await requireTenant();
+  /* Scoped by workspace, not just by id — otherwise a guessed uuid from
+     another tenant would render their customer's books. */
+  const [company] = await db
+    .select()
+    .from(companies)
+    .where(and(eq(companies.id, id), eq(companies.workspaceId, workspaceId)));
   if (!company) notFound();
 
   const [people, openDeals, timeline, invoices, [connection]] = await Promise.all([
@@ -104,7 +111,7 @@ export default async function CompanyPage({
     db
       .select()
       .from(connections)
-      .where(eq(connections.workspaceId, company.workspaceId))
+      .where(eq(connections.workspaceId, workspaceId))
       .limit(1),
   ]);
 

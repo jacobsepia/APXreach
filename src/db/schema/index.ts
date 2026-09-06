@@ -146,6 +146,21 @@ export const syncedInvoices = pgTable("synced_invoices", {
 });
 
 /*
+ * Who may open a workspace, and as what. This table is what makes Reach
+ * multi-tenant rather than single-company: nothing resolves "the workspace"
+ * any more, it resolves "this person's workspace". A user with no row here
+ * has an account but no company yet, and onboarding sends them to make one.
+ */
+export const workspaceMembers = pgTable("workspace_members", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
+  /* Better Auth's user.id — text, matching the auth schema. */
+  userId: text("user_id").notNull(),
+  role: text("role").default("owner").notNull(), // owner | member
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/*
  * A books connection — provider-shaped, the way Collect holds its Xero and
  * QuickBooks connections. APX Ledger is provider #1; the provider column is
  * what keeps Reach from ever being hard-wired to one system.

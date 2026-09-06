@@ -1,14 +1,16 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
+import { genericOAuth } from "better-auth/plugins";
 import { db } from "@/db";
 import * as authSchema from "@/db/schema/auth";
 
 /*
- * Same posture as APX Ledger's auth. Email/password for now; Sign in with APX
- * (Ledger's OIDC provider) becomes a genericOAuth provider here once Ledger's
- * consent screen ships — same session, same tables.
+ * Same posture as APX Ledger's auth, and now the same two front doors:
+ * "Sign in with APX" against Ledger's OIDC provider, or an ordinary
+ * email/password account for someone who has never heard of Ledger.
+ * Registration is open — tenancy, not a domain allowlist, is what keeps one
+ * company's pipeline out of another's (see lib/workspace.ts).
  */
 
 /**
@@ -30,12 +32,7 @@ function trustedOrigins(): string[] {
   return [...origins];
 }
 
-/*
- * Who may register. Reach holds figures synced from the books, so sign-up is
- * not public: only these domains get in. Widen the list (or replace with
- * invitations) when the team grows past the company.
- */
-const ALLOWED_SIGNUP_DOMAINS = ["apxsolutions.ca"];
+const APXLEDGER_URL = process.env.APXLEDGER_BASE_URL ?? "https://www.apxledger.ca";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "pg", schema: authSchema }),
@@ -43,21 +40,29 @@ export const auth = betterAuth({
     enabled: true,
   },
   trustedOrigins: trustedOrigins(),
-  hooks: {
-    before: createAuthMiddleware(async (ctx) => {
-      if (ctx.path === "/sign-up/email") {
-        const email = String(
-          (ctx.body as { email?: string } | undefined)?.email ?? "",
-        ).toLowerCase();
-        const domain = email.split("@")[1] ?? "";
-        if (!ALLOWED_SIGNUP_DOMAINS.includes(domain)) {
-          throw new APIError("BAD_REQUEST", {
-            message:
-              "Sign-up is limited to the APX team for now. Ask Jacob for an account.",
-          });
-        }
-      }
-    }),
-  },
-  plugins: [nextCookies()],
+  /*
+   * Two front doors, which is the product's shape: bring your APX identity,
+   * or make an account here. Signing in with APX asks only for identity
+   * scopes — connecting books is a separate, later consent, so nobody hands
+   * over their ledger just to log in.
+   */
+  plugins: [
+    ...(process.env.APXLEDGER_CLIENT_ID && process.env.APXLEDGER_CLIENT_SECRET
+      ? [
+          genericOAuth({
+            config: [
+              {
+                providerId: "apx",
+                discoveryUrl: `${APXLEDGER_URL}/.well-known/openid-configuration`,
+                clientId: process.env.APXLEDGER_CLIENT_ID.trim(),
+                clientSecret: process.env.APXLEDGER_CLIENT_SECRET.trim(),
+                scopes: ["openid", "email", "profile"],
+                pkce: true,
+              },
+            ],
+          }),
+        ]
+      : []),
+    nextCookies(),
+  ],
 });

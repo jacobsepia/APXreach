@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
+import { createWorkspaceFor, requireTenantOrThrow } from "@/lib/workspace";
 import {
   activities,
   companies,
@@ -26,12 +27,14 @@ import { clientCredentials, revokeToken } from "@/lib/oauth";
  * and these functions grow an authorization check at the top.
  */
 
+/*
+ * The workspace every mutation writes into: the signed-in person's, resolved
+ * from their membership. Never "the first workspace" — that was the shape
+ * that made this app single-tenant.
+ */
 async function workspaceId(): Promise<string> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) throw new Error("Not signed in.");
-  const [ws] = await db.select({ id: workspaces.id }).from(workspaces).limit(1);
-  if (!ws) throw new Error("No workspace yet — run the seed or create one.");
-  return ws.id;
+  const { workspaceId } = await requireTenantOrThrow();
+  return workspaceId;
 }
 
 /** The signed-in person's name, for timeline attribution. */
@@ -137,11 +140,12 @@ export async function createTask(formData: FormData): Promise<void> {
 }
 
 export async function completeTask(formData: FormData): Promise<void> {
+  const wsId = await workspaceId();
   const id = trimmed.min(1).parse(formData.get("taskId"));
   await db
     .update(activities)
     .set({ completedAt: new Date() })
-    .where(eq(activities.id, id));
+    .where(and(eq(activities.id, id), eq(activities.workspaceId, wsId)));
   revalidatePath("/tasks");
   revalidatePath("/dashboard");
 }
@@ -164,11 +168,12 @@ export async function logActivity(formData: FormData): Promise<void> {
   await db
     .update(contacts)
     .set({ lastActivityAt: new Date() })
-    .where(eq(contacts.companyId, companyId));
+    .where(and(eq(contacts.companyId, companyId), eq(contacts.workspaceId, wsId)));
   revalidatePath(`/companies/${companyId}`);
 }
 
 export async function setDealStage(formData: FormData): Promise<void> {
+  const wsId = await workspaceId();
   const dealId = trimmed.min(1).parse(formData.get("dealId"));
   const stageId = trimmed.min(1).parse(formData.get("stageId"));
   const [stage] = await db
@@ -184,7 +189,7 @@ export async function setDealStage(formData: FormData): Promise<void> {
       wonAt: stage.kind === "won" ? new Date() : null,
       updatedAt: new Date(),
     })
-    .where(eq(deals.id, dealId));
+    .where(and(eq(deals.id, dealId), eq(deals.workspaceId, wsId)));
   revalidatePath("/deals");
   revalidatePath("/dashboard");
 }
@@ -234,4 +239,19 @@ export async function disconnectBooks(): Promise<void> {
 
   revalidatePath("/settings");
   revalidatePath("/dashboard");
+}
+
+
+/*
+ * Onboarding. Creates the workspace this person owns, with an empty CRM and a
+ * default pipeline — the first thing a new tenant sees is their own blank
+ * board, never someone else's data.
+ */
+export async function createWorkspace(formData: FormData): Promise<void> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/sign-in");
+  const name = trimmed.min(1, "Give the company a name.").parse(formData.get("companyName"));
+  await createWorkspaceFor(session.user.id, name);
+  revalidatePath("/", "layout");
+  redirect("/dashboard");
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ApxSignInButton } from "@/components/apx-sign-in";
 import { signUp } from "@/lib/auth-client";
 
 const field =
@@ -45,10 +46,11 @@ export default function SignUpPage() {
             Start <span className="gradient-text-flow">reaching</span>.
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            APX team accounts only, for now.
+            Bring your APX identity, or make an account here.
           </p>
         </div>
         <div className="accent-rail relative overflow-hidden rounded-2xl border border-border bg-white p-6 shadow-[var(--edge-top)]">
+          <ApxSignInButton label="Sign up with APX Ledger" />
           <form onSubmit={submit} className="flex flex-col gap-3.5">
             <div className="flex flex-col gap-1">
               <span className={label}>Name</span>

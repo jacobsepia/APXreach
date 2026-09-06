@@ -55,8 +55,14 @@ export function clientCredentials(
   if (!provider.oauth) {
     return { ok: false, error: `${provider.label} does not support connecting yet.` };
   }
-  const clientId = process.env[provider.oauth.clientIdEnv];
-  const clientSecret = process.env[provider.oauth.clientSecretEnv];
+  /*
+   * Trimmed on the way in. A secret pasted into a dashboard field arrives
+   * with a trailing newline more often than anyone admits, and the failure it
+   * causes — the provider rejecting credentials that look correct — costs
+   * more to diagnose than this line costs to write.
+   */
+  const clientId = process.env[provider.oauth.clientIdEnv]?.trim();
+  const clientSecret = process.env[provider.oauth.clientSecretEnv]?.trim();
   if (!clientId || !clientSecret) {
     return {
       ok: false,
@@ -149,6 +155,18 @@ async function postToken(
         : typeof body.error === "string"
           ? body.error
           : `HTTP ${response.status}`;
+    /*
+     * invalid_client means our own credentials were refused — a deployment
+     * problem, not something the person did. Say which knob to turn, because
+     * the provider's wording ("Client authentication failed") sends people
+     * looking at their own account instead.
+     */
+    if (body.error === "invalid_client") {
+      return {
+        ok: false,
+        error: `${provider.label} refused Reach's own client credentials. Check ${provider.oauth!.clientSecretEnv} matches the currently registered secret, then redeploy — env var changes only take effect on a new deployment.`,
+      };
+    }
     return { ok: false, error: description };
   }
 

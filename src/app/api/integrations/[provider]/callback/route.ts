@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { getProvider } from "@/lib/providers";
 import { callbackUrl, clientCredentials, exchangeCode, statesMatch } from "@/lib/oauth";
 import { saveConnection } from "@/lib/sync";
+import { requireTenantOrThrow } from "@/lib/workspace";
 
 /*
  * Step two: the provider sends the person back with a code. Verify the state
@@ -81,7 +82,8 @@ export async function GET(
   });
   if (!tokens.ok) return finish(tokens.error);
 
-  const saved = await saveConnection(provider, tokens.value);
+  const { workspaceId } = await requireTenantOrThrow();
+  const saved = await saveConnection(workspaceId, provider, tokens.value);
   if (!saved.ok) return finish(saved.error);
   return finish();
 }

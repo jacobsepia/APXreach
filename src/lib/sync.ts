@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { activities, companies, connections, db, syncedInvoices, workspaces } from "@/db";
+import { activities, companies, connections, db, syncedInvoices } from "@/db";
 import { getProvider, type AccountingProvider, type OAuthTokens } from "@/lib/providers";
 import { clientCredentials, refreshTokens } from "@/lib/oauth";
 
@@ -19,11 +19,11 @@ type Outcome = { ok: true } | { ok: false; error: string };
  * it, because the token already knows.
  */
 export async function saveConnection(
+  workspaceId: string,
   provider: AccountingProvider,
   tokens: OAuthTokens,
 ): Promise<Outcome> {
-  const [workspace] = await db.select({ id: workspaces.id }).from(workspaces).limit(1);
-  if (!workspace) return { ok: false, error: "No workspace yet." };
+  const workspace = { id: workspaceId };
 
   const identified = await provider.validate(tokens.accessToken);
   if (!identified.ok) return identified;

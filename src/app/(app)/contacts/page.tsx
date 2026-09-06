@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { desc, eq, sql } from "drizzle-orm";
-import { companies, contacts, db } from "@/db";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { activities, companies, contacts, db, deals, pipelineStages } from "@/db";
 import { money, relativeDay } from "@/lib/format";
 import { Avatar, Card, LedgerDot, Pill, StagePill } from "@/components/ui";
 import { QuickCreate } from "@/components/quick-create";
+import { ContactRecordModal } from "@/components/contact-record-modal";
+import { requireTenant } from "@/lib/workspace";
 import { Download } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +13,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Contacts" };
 
 export default async function ContactsPage() {
+  const { workspaceId } = await requireTenant();
   const [rows, stageCounts, overdueAccounts, companyOptions] = await Promise.all([
     db
       .select({
@@ -18,9 +21,12 @@ export default async function ContactsPage() {
         firstName: contacts.firstName,
         lastName: contacts.lastName,
         email: contacts.email,
+        phone: contacts.phone,
+        title: contacts.title,
         lifecycleStage: contacts.lifecycleStage,
         ownerName: contacts.ownerName,
         lastActivityAt: contacts.lastActivityAt,
+        createdAt: contacts.createdAt,
         companyId: companies.id,
         companyName: companies.name,
         arBalanceCents: companies.arBalanceCents,
@@ -28,18 +34,21 @@ export default async function ContactsPage() {
       })
       .from(contacts)
       .leftJoin(companies, eq(contacts.companyId, companies.id))
+      .where(eq(contacts.workspaceId, workspaceId))
       .orderBy(desc(contacts.lastActivityAt)),
     db
       .select({ stage: contacts.lifecycleStage, count: sql<number>`count(*)` })
       .from(contacts)
+      .where(eq(contacts.workspaceId, workspaceId))
       .groupBy(contacts.lifecycleStage),
     db
       .select({ count: sql<number>`count(*)` })
       .from(companies)
-      .where(sql`${companies.overdueCents} > 0`),
+      .where(and(sql`${companies.overdueCents} > 0`, eq(companies.workspaceId, workspaceId))),
     db
       .select({ id: companies.id, name: companies.name })
       .from(companies)
+      .where(eq(companies.workspaceId, workspaceId))
       .orderBy(companies.name),
   ]);
 
@@ -48,6 +57,35 @@ export default async function ContactsPage() {
   const total = rows.length;
   const customerCount = countOf("customer");
   const overdueCount = Number(overdueAccounts[0]?.count ?? 0);
+  const [activityRows, dealRows] = await Promise.all([
+    db
+      .select({
+        id: activities.id,
+        contactId: activities.contactId,
+        type: activities.type,
+        subject: activities.subject,
+        body: activities.body,
+        actorName: activities.actorName,
+        occurredAt: activities.occurredAt,
+        completedAt: activities.completedAt,
+      })
+      .from(activities)
+      .where(eq(activities.workspaceId, workspaceId))
+      .orderBy(desc(activities.occurredAt)),
+    db
+      .select({
+        id: deals.id,
+        contactId: deals.contactId,
+        name: deals.name,
+        amountCents: deals.amountCents,
+        closeDate: deals.closeDate,
+        status: deals.status,
+        stageName: pipelineStages.name,
+      })
+      .from(deals)
+      .innerJoin(pipelineStages, eq(deals.stageId, pipelineStages.id))
+      .where(eq(deals.workspaceId, workspaceId)),
+  ]);
 
   const chip =
     "flex h-[30px] items-center gap-1.5 rounded-full border border-border bg-white px-3 text-[12.5px] font-medium text-muted-foreground";
@@ -105,12 +143,16 @@ export default async function ContactsPage() {
             key={row.id}
             className={`transition-colors hover:bg-[var(--tint)] grid h-[46px] grid-cols-[220px_200px_minmax(0,1fr)_120px_70px_110px_110px] items-center gap-3 px-4 text-[13px] ${i < rows.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
           >
-            <span className="flex min-w-0 items-center gap-2.5">
+            <ContactRecordModal
+              contact={row}
+              activities={activityRows.filter((activity) => activity.contactId === row.id)}
+              deals={dealRows.filter((deal) => deal.contactId === row.id)}
+            >
               <Avatar name={`${row.firstName} ${row.lastName}`} />
-              <span className="truncate font-medium text-foreground">
+              <span className="truncate font-medium text-foreground group-hover:text-[var(--accent-primary)]">
                 {row.firstName} {row.lastName}
               </span>
-            </span>
+            </ContactRecordModal>
             <span className="truncate text-muted-foreground">
               {row.companyId ? (
                 <Link href={`/companies/${row.companyId}`} className="hover:text-foreground">

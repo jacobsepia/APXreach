@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { desc, eq, sql } from "drizzle-orm";
 import { companies, db, deals } from "@/db";
+import { requireTenant } from "@/lib/workspace";
 import { money } from "@/lib/format";
 import { Avatar, Card, LedgerDot, StagePill } from "@/components/ui";
 
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Companies" };
 
 export default async function CompaniesPage() {
+  const tenant = await requireTenant();
   const rows = await db
     .select({
       id: companies.id,
@@ -24,6 +26,7 @@ export default async function CompaniesPage() {
       openValue: sql<number>`coalesce(sum(${deals.amountCents}) filter (where ${deals.status} = 'open'), 0)`,
     })
     .from(companies)
+    .where(eq(companies.workspaceId, tenant.workspaceId))
     .leftJoin(deals, eq(deals.companyId, companies.id))
     .groupBy(companies.id)
     .orderBy(desc(companies.arBalanceCents), companies.name);

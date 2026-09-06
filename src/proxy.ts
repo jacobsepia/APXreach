@@ -9,7 +9,8 @@ import { NextResponse, type NextRequest } from "next/server";
  * (same as Ledger's src/proxy.ts).
  */
 
-const PUBLIC_PREFIXES = ["/sign-in", "/sign-up", "/api/auth", "/_next", "/favicon"];
+const PUBLIC_PREFIXES = ["/sign-in",
+  "/welcome", "/sign-up", "/api/auth", "/_next", "/favicon"];
 
 function hasSessionCookie(request: NextRequest): boolean {
   return Boolean(

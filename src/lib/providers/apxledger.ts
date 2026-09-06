@@ -17,7 +17,15 @@ import type {
  * Money is integer cents, day-dates YYYY-MM-DD; shapes mirror serialize.ts.
  */
 
-const BASE_URL = process.env.APXLEDGER_BASE_URL ?? "https://apxledger.ca";
+/*
+ * The CANONICAL host, and it matters: apxledger.ca 308-redirects to www, and
+ * fetch strips the Authorization header across a cross-host redirect. Pointing
+ * at the bare domain means every credentialed call — token exchange and every
+ * /api/v1 read — arrives anonymous, which the API reports as a bad credential
+ * rather than a missing one. Verified: the bare host answers "Send an API key
+ * or access token", the www host answers "This credential is not valid".
+ */
+const BASE_URL = process.env.APXLEDGER_BASE_URL ?? "https://www.apxledger.ca";
 
 const connectionSchema = z.object({
   companyId: z.string(),

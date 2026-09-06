@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { signIn } from "@/lib/auth-client";
+import { ApxSignInButton } from "@/components/apx-sign-in";
 
 const field =
   "h-10 w-full rounded-[10px] border border-[rgba(21,24,28,0.14)] bg-white px-3 text-sm text-[#15181c] outline-none focus:border-[#6b21a8]";
@@ -34,7 +35,9 @@ function SignInForm() {
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3.5">
+    <>
+      <ApxSignInButton label="Continue with APX Ledger" />
+      <form onSubmit={submit} className="flex flex-col gap-3.5">
       <div className="flex flex-col gap-1">
         <span className={label}>Email</span>
         <input name="email" type="email" required autoFocus autoComplete="email" className={field} />
@@ -51,7 +54,8 @@ function SignInForm() {
       >
         {busy ? "Signing in…" : "Sign in"}
       </button>
-    </form>
+      </form>
+    </>
   );
 }
 

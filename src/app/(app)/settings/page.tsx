@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { eq } from "drizzle-orm";
 import { db, connections } from "@/db";
+import { requireTenant } from "@/lib/workspace";
 import { comingSoon, providers } from "@/lib/providers";
 import { Card, Caps, LedgerDot, Pill } from "@/components/ui";
 import { DisconnectButton, SyncNowButton } from "@/components/connect-books";
@@ -21,7 +23,12 @@ export default async function SettingsPage({
   searchParams: Promise<{ error?: string; connected?: string }>;
 }) {
   const { error, connected: justConnected } = await searchParams;
-  const [connection] = await db.select().from(connections).limit(1);
+  const { workspaceId } = await requireTenant();
+  const [connection] = await db
+    .select()
+    .from(connections)
+    .where(eq(connections.workspaceId, workspaceId))
+    .limit(1);
   const live = connection?.status === "connected" && Boolean(connection.accessToken);
   const demoOnly = connection?.status === "connected" && !connection.accessToken;
   const available = Object.values(providers);
