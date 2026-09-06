@@ -26,6 +26,35 @@ export const starterTemplates: EmailTemplate[] = [
   starter("payment-follow-up", "Payment follow-up", "Payment date for invoice {{invoice_number}}", "I’m following up on invoice {{invoice_number}}. Our latest records still show {{invoice_balance}} outstanding against the {{invoice_due_date}} due date.\n\nPlease reply with the date you expect to make payment. If something is holding it up, let me know so we can discuss the next step.\n\nIf payment has already been made, please send the date and reference so we can check it.", "overdue"),
 ];
 
+/**
+ * The reverse of rendering: a draft written for one customer, turned back
+ * into a template for every customer. The signature block becomes the
+ * {{sender_signature}} tag, then every value the render put in — the
+ * customer's name, their company, the invoice — becomes its tag again,
+ * longest value first so "APX Solutions" is replaced before "APX" could be.
+ * Values shorter than two characters are left alone; nothing that short is
+ * safe to swap.
+ */
+export function depersonalizeTemplate(draft: { subject: string; bodyHtml: string }, values: Record<string, string>, senderName: string) {
+  let { subject, bodyHtml } = draft;
+  const name = escapeHtml(senderName.trim());
+  if (name) {
+    const marker = `<strong>${name}</strong>`;
+    const at = bodyHtml.lastIndexOf(marker);
+    const end = at >= 0 ? bodyHtml.indexOf("</p>", at) : -1;
+    if (at >= 0 && end >= 0) bodyHtml = bodyHtml.slice(0, at) + "{{sender_signature}}" + bodyHtml.slice(end);
+  }
+  const entries = Object.entries(values)
+    .filter(([tag, value]) => Object.hasOwn(templateTags, tag) && tag !== "sender_signature" && value.trim().length >= 2)
+    .sort((a, b) => b[1].trim().length - a[1].trim().length);
+  for (const [tag, raw] of entries) {
+    const value = raw.trim();
+    subject = subject.split(value).join(`{{${tag}}}`);
+    bodyHtml = bodyHtml.split(escapeHtml(value)).join(`{{${tag}}}`);
+  }
+  return { subject, bodyHtml };
+}
+
 export function tagsIn(text: string): string[] {
   return [...new Set(Array.from(text.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g), match => match[1].trim()))];
 }

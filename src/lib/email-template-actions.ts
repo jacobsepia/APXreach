@@ -7,7 +7,7 @@ import { z } from "zod";
 import { db, emailTemplates } from "@/db";
 import { requireTenantOrThrow } from "./workspace";
 import { prepareEmailBody, sanitizeEmailHtml } from "./email-content";
-import { hasUnresolvedTags, renderEmailTemplate, starterTemplates, tagsIn, templateTags } from "./email-templates";
+import { depersonalizeTemplate, hasUnresolvedTags, renderEmailTemplate, starterTemplates, tagsIn, templateTags } from "./email-templates";
 import { contactTemplateContext, workspaceTemplates } from "./email-template-store";
 
 class TemplateInputError extends Error {}
@@ -49,6 +49,53 @@ export async function saveEmailTemplate(form: FormData) {
   });
 }
 
+/** The three invoice tags, formatted the one way they are ever shown. */
+function invoiceValues(invoice: { number: string; outstandingCents: number; dueDate: string }, currency: string | null) {
+  if (!currency || !/^[A-Z]{3}$/.test(currency)) throw new TemplateInputError("The books currency is unavailable. Sync the connected books before using an invoice template.");
+  return {
+    invoice_number: invoice.number,
+    invoice_balance: new Intl.NumberFormat("en-CA", { style: "currency", currency, currencyDisplay: "code" }).format(invoice.outstandingCents / 100),
+    invoice_due_date: new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(invoice.dueDate + "T00:00:00Z")),
+  };
+}
+
+/**
+ * The draft in the composer becomes the workspace's template for that key.
+ * The person edited a personalised copy — "Hi Joseph", their company, an
+ * invoice number — so the copy is turned back into tags before it is saved,
+ * using the same values the render put in. Saving replaces the template for
+ * everyone in the workspace; drafts already open are untouched.
+ */
+export async function saveDraftAsTemplate(form: FormData) {
+  return templateResult(async () => {
+  const tenant = await requireTenantOrThrow();
+  const key = z.string().parse(form.get("key"));
+  const template = (await workspaceTemplates(tenant.workspaceId)).find(item => item.key === key);
+  if (!template) throw new TemplateInputError("Template unavailable.");
+  const subjectDraft = z.string().trim().min(1).max(998).regex(/^[^\r\n]+$/).parse(form.get("subject"));
+  const bodyDraft = sanitizeEmailHtml(z.string().max(200000).parse(form.get("bodyHtml")));
+  const context = await contactTemplateContext(tenant.workspaceId, z.uuid().parse(form.get("contactId")), tenant.userName, tenant.workspaceName, tenant.userId);
+  const fields = z.record(z.string().max(80), z.string().max(1000)).parse(JSON.parse(z.string().max(16000).parse(form.get("fields") ?? "{}")));
+  const values: Record<string, string> = { ...context.values };
+  for (const [tag, value] of Object.entries(fields)) {
+    if (Object.hasOwn(templateTags, tag) && !tag.startsWith("invoice_") && !values[tag]) values[tag] = value;
+  }
+  const invoiceNumber = z.string().max(200).parse(form.get("invoiceNumber") ?? "");
+  const invoice = invoiceNumber ? context.invoices.find(inv => inv.number === invoiceNumber) : undefined;
+  if (invoice) Object.assign(values, invoiceValues(invoice, context.currency));
+
+  const generic = depersonalizeTemplate({ subject: subjectDraft, bodyHtml: bodyDraft }, values, tenant.userName);
+  const bodyHtml = validateTemplate(generic.subject, generic.bodyHtml);
+  const revision = randomUUID();
+  const updatedAt = new Date();
+  await db.insert(emailTemplates)
+    .values({ workspaceId: tenant.workspaceId, key, name: template.name, subject: generic.subject, bodyHtml, revision, updatedAt })
+    .onConflictDoUpdate({ target: [emailTemplates.workspaceId, emailTemplates.key], set: { subject: generic.subject, bodyHtml, revision, updatedAt } });
+  revalidatePath("/settings/templates");
+  return { key, name: template.name, subject: generic.subject, bodyHtml, revision };
+  });
+}
+
 export async function prepareTemplateDraft(form: FormData) {
   return templateResult(async () => {
   const tenant = await requireTenantOrThrow();
@@ -71,12 +118,7 @@ export async function prepareTemplateDraft(form: FormData) {
   const matches = invoices.filter(inv => inv.number === invoiceNumber);
   if (needsInvoice && invoiceNumber && matches.length !== 1) throw new TemplateInputError("That invoice is no longer eligible. Choose a current invoice and try again.");
   const invoice = needsInvoice ? matches[0] : undefined;
-  if (invoice) {
-    if (!context.currency || !/^[A-Z]{3}$/.test(context.currency)) throw new TemplateInputError("The books currency is unavailable. Sync the connected books before using an invoice template.");
-    values.invoice_number = invoice.number;
-    values.invoice_balance = new Intl.NumberFormat("en-CA", { style: "currency", currency: context.currency, currencyDisplay: "code" }).format(invoice.outstandingCents / 100);
-    values.invoice_due_date = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(invoice.dueDate + "T00:00:00Z"));
-  }
+  if (invoice) Object.assign(values, invoiceValues(invoice, context.currency));
   const rendered = renderEmailTemplate({ subject, bodyHtml }, values);
   const safe = prepareEmailBody("", rendered.bodyHtml);
   return { ...rendered, bodyHtml: sanitizeEmailHtml(rendered.bodyHtml), text: safe.text, needsInvoice, invoices, lastSyncAt: context.lastSyncAt,

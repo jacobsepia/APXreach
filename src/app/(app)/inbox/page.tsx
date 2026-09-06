@@ -1,18 +1,18 @@
-import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
 import { companies, contacts, db, emailMessages, mailboxes } from "@/db";
 import { requireTenant } from "@/lib/workspace";
 import { pollMailboxesNow } from "@/lib/actions";
 import { isFresh, pollMailbox } from "@/lib/mailbox/poll";
-import { Avatar, Card, EmptyState, Pill } from "@/components/ui";
-import { ComposeEmail } from "@/components/compose-email";
-import { ArrowDownLeft, ArrowUpRight, RefreshCw } from "lucide-react";
+import { sanitizeEmailHtml } from "@/lib/email-content";
+import { EmptyState } from "@/components/ui";
+import { InboxView, type InboxItem } from "@/components/inbox-view";
+import { RefreshCw } from "lucide-react";
 
 /*
  * The Inbox: every email between the workspace and the people in it, both
  * directions, newest first. Not a mail client — the mailbox is still the
  * person's own, and this is the CRM's view of it: only mail to or from
- * someone on a record, each line a link back to that record.
+ * someone on a record, each one a step from that record.
  *
  * Opening the page polls the signed-in person's mailboxes when the last look
  * is more than two minutes old. That is what keeps replies near-live on a
@@ -29,11 +29,6 @@ const stamp = new Intl.DateTimeFormat("en-CA", {
   hour: "numeric",
   minute: "2-digit",
 });
-
-function snippet(text: string, max = 140): string {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
-}
 
 export default async function InboxPage() {
   /* Membership is resolved on the server; everything below is one workspace. */
@@ -80,6 +75,8 @@ export default async function InboxPage() {
       toAddress: emailMessages.toAddress,
       subject: emailMessages.subject,
       bodyText: emailMessages.bodyText,
+      bodyHtml: emailMessages.bodyHtml,
+      attachments: emailMessages.attachments,
       sentAt: emailMessages.sentAt,
       contactId: contacts.id,
       contactFirst: contacts.firstName,
@@ -107,6 +104,33 @@ export default async function InboxPage() {
       />
     );
   }
+
+  /* Bodies are sanitized here, once, so the client renders what it is given.
+     Inbound HTML came from a stranger's mail client and is never trusted raw. */
+  const items: InboxItem[] = messages.map((m) => {
+    const inbound = m.direction === "inbound";
+    const contactName = m.contactId
+      ? `${m.contactFirst} ${m.contactLast}`.replace(/ —$/, "").trim()
+      : inbound
+        ? m.fromAddress
+        : m.toAddress;
+    return {
+      id: m.id,
+      direction: inbound ? "inbound" : "outbound",
+      fromAddress: m.fromAddress,
+      toAddress: m.toAddress,
+      subject: m.subject || "(no subject)",
+      bodyText: m.bodyText,
+      bodyHtml: m.bodyHtml ? sanitizeEmailHtml(m.bodyHtml) : null,
+      attachments: m.attachments ?? [],
+      sentAt: m.sentAt.toISOString(),
+      contactId: m.contactId,
+      contactName,
+      contactEmail: m.contactEmail,
+      companyId: m.companyId,
+      companyName: m.companyName,
+    };
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -141,86 +165,7 @@ export default async function InboxPage() {
         </p>
       ))}
 
-      <Card index={0} className="overflow-hidden">
-        {messages.map((m, i) => {
-          const inbound = m.direction === "inbound";
-          const person =
-            m.contactId
-              ? `${m.contactFirst} ${m.contactLast}`.replace(/ —$/, "").trim()
-              : inbound
-                ? m.fromAddress
-                : m.toAddress;
-          return (
-            <div
-              key={m.id}
-              className={`grid grid-cols-[28px_200px_minmax(0,1fr)_120px_88px] items-center gap-3 px-4 py-3 text-[13px] transition-colors hover:bg-[var(--tint)] ${i < messages.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
-            >
-              <span
-                title={inbound ? "Received" : "Sent"}
-                className={`flex size-7 items-center justify-center rounded-full ${
-                  inbound
-                    ? "bg-[color-mix(in_srgb,var(--accent-data)_18%,transparent)] text-[#4d7c0f]"
-                    : "bg-[var(--tint-strong)] text-[var(--accent-primary)]"
-                }`}
-              >
-                {inbound ? (
-                  <ArrowDownLeft className="size-3.5" />
-                ) : (
-                  <ArrowUpRight className="size-3.5" />
-                )}
-              </span>
-
-              <span className="flex min-w-0 items-center gap-2">
-                <Avatar name={person} className="size-6" />
-                <span className="min-w-0">
-                  <span className="block truncate font-medium text-foreground">{person}</span>
-                  {m.companyId && (
-                    <Link
-                      href={`/companies/${m.companyId}`}
-                      className="block truncate text-xs text-[var(--text-tertiary)] hover:text-foreground"
-                    >
-                      {m.companyName}
-                    </Link>
-                  )}
-                </span>
-              </span>
-
-              <span className="min-w-0">
-                <span className="block truncate font-medium text-foreground">{m.subject}</span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {snippet(m.bodyText)}
-                </span>
-              </span>
-
-              <span className="text-right text-xs text-[var(--text-tertiary)]">
-                {stamp.format(m.sentAt)}
-              </span>
-
-              <span className="flex justify-end">
-                {inbound && m.contactId && m.contactEmail ? (
-                  <ComposeEmail
-                    companyId={m.companyId ?? undefined}
-                    from={from}
-                    recipients={[{ id: m.contactId, name: person, email: m.contactEmail }]}
-                    defaultRecipientId={m.contactId}
-                    defaultSubject={/^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject}`}
-                    buttonLabel="Reply"
-                  />
-                ) : (
-                  <Pill kind={inbound ? "ledger" : "customer"}>{inbound ? "Received" : "Sent"}</Pill>
-                )}
-              </span>
-            </div>
-          );
-        })}
-        {messages.length === 0 && (
-          <p className="px-4 py-6 text-sm text-muted-foreground">
-            Nothing yet. Email a contact from their record, and their reply will show
-            up here — mail from addresses Reach doesn&apos;t know is left in your
-            mailbox where it was.
-          </p>
-        )}
-      </Card>
+      <InboxView items={items} from={from} />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { attachmentProblem, formatBytes, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES }
 import { loadContactRecord } from "@/lib/contact-record";
 import { sendEmailFromRecord } from "@/lib/actions";
 import { rewriteEmailTone } from "@/lib/email-tone-actions";
+import { saveDraftAsTemplate } from "@/lib/email-template-actions";
 import { toneList, tones, type Tone } from "@/lib/email-tone-list";
 import { money, relativeDay, shortDate } from "@/lib/format";
 import { StagePill } from "@/components/ui";
@@ -76,7 +77,11 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [confirmClose, setConfirmClose] = useState(false);
+  /* The template this draft came from, as applied. When the draft drifts from
+     it, "Save as template" lights up; saving makes the edit the template. */
+  const [applied, setApplied] = useState<{ key: string; name: string; subject: string; bodyHtml: string; fields: Record<string, string>; invoiceNumber: string } | null>(null);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateStatus, setTemplateStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   /* Tone rewriting: which pill is working, what went wrong, and the draft from
      just before the last rewrite so Undo is one click and never a guess. */
   const [rewriting, setRewriting] = useState<Tone | null>(null);
@@ -117,11 +122,38 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
   };
   const removeFile = (index: number) => { setAttachments(attachments.filter((_, i) => i !== index)); setAttachError(null); };
 
+  const resetDraft = () => {
+    setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null);
+    signatureInitialized.current = false; signatureText.current = "";
+    clearRewrite(); clearAttachments(); setApplied(null); setTemplateStatus(null);
+  };
+
+  /* Closing never asks. A draft in progress simply waits here — reopen the
+     record and it is where it was left. Only Send or "Discard draft" ends it. */
   const requestClose = () => {
     if (sendingRef.current || rewritingRef.current) return;
-    if (dirty) { setConfirmClose(true); return; }
-    setBody(""); setBodyHtml(""); signatureInitialized.current = false; signatureText.current = ""; clearRewrite(); clearAttachments();
+    if (!dirty) resetDraft();
     setOpen(false);
+  };
+
+  const templateEdited = applied !== null && (subject !== applied.subject || bodyHtml !== applied.bodyHtml);
+  const saveTemplate = async () => {
+    if (!applied || !templateEdited || savingTemplate || busy) return;
+    setSavingTemplate(true); setTemplateStatus(null);
+    const form = new FormData();
+    form.set("key", applied.key); form.set("subject", subject); form.set("bodyHtml", bodyHtml); form.set("contactId", contact.id);
+    form.set("fields", JSON.stringify(applied.fields)); form.set("invoiceNumber", applied.invoiceNumber);
+    try {
+      const response = await saveDraftAsTemplate(form);
+      if (response.error) throw new Error(response.error);
+      setApplied({ ...applied, subject, bodyHtml });
+      setTemplateStatus({ kind: "ok", text: `Saved as your “${response.data!.name}” template. Everyone in the workspace gets this version from now on; your draft here is unchanged.` });
+      refresh();
+    } catch (caught) {
+      setTemplateStatus({ kind: "error", text: caught instanceof Error ? caught.message : "Could not save the template. Your draft is unchanged." });
+    } finally {
+      setSavingTemplate(false);
+    }
   };
 
   const rewrite = async (tone: Tone) => {
@@ -206,7 +238,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
     for (const file of attachments) form.append("attachments", file);
     try {
       await sendEmailFromRecord(form);
-      setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); setQuery(""); signatureInitialized.current = false; signatureText.current = ""; clearRewrite(); clearAttachments();
+      resetDraft(); setQuery("");
       setView("emails");
       setNotice("Email sent from " + data.mailbox.emailAddress + ".");
       refresh();
@@ -246,12 +278,6 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
                 <button autoFocus type="button" onClick={requestClose} disabled={sending} aria-label="Close contact record" className={styles.closeButton}><X size={20} /></button>
               </div>
             </header>
-
-            {confirmClose && <div className={styles.discardBar} role="alert">
-              <span>You have an unsent draft. Discard it and close?</span>
-              <button type="button" className={styles.secondaryButton} onClick={() => { setConfirmClose(false); setView("compose"); }}>Keep writing</button>
-              <button type="button" className={styles.textButton} onClick={() => { setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); signatureInitialized.current = false; signatureText.current = ""; clearRewrite(); clearAttachments(); setConfirmClose(false); setOpen(false); }}>Discard draft</button>
-            </div>}
 
             <div className={styles.workspace}>
               <aside className={styles.sidebar}>
@@ -337,12 +363,13 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
                             </div>
                           )}
                           <input ref={fileInput} type="file" multiple hidden aria-hidden="true" tabIndex={-1} onChange={(event) => addFiles(event.target.files)} />
-                          <TemplateEmailEditor contactId={contact.id} templates={data.templates} value={bodyHtml} disabled={busy} firstName={contact.firstName} dirty={dirty} onChange={(html, text) => { setBodyHtml(html); setBody(text); }} onApply={draft => { setSubject(draft.subject); setBodyHtml(draft.bodyHtml); setBody(draft.text); setInvoiceReference(draft.invoiceReference); setSendError(null); clearRewrite(); }}
-                            toolbarExtra={<button type="button" className={styles.attachButton} aria-label="Attach files" title={`Attach files — up to ${MAX_ATTACHMENTS}, ${formatBytes(MAX_ATTACHMENT_BYTES)} total`} disabled={busy} onMouseDown={(event) => event.preventDefault()} onClick={() => fileInput.current?.click()}><Paperclip size={15} />{attachments.length > 0 && <span>{attachments.length}</span>}</button>} />
+                          <TemplateEmailEditor contactId={contact.id} templates={data.templates} value={bodyHtml} disabled={busy} firstName={contact.firstName} dirty={dirty} onChange={(html, text) => { setBodyHtml(html); setBody(text); }} onApply={(draft, source) => { setSubject(draft.subject); setBodyHtml(draft.bodyHtml); setBody(draft.text); setInvoiceReference(draft.invoiceReference); setSendError(null); clearRewrite(); setTemplateStatus(null); setApplied({ ...source, subject: draft.subject, bodyHtml: draft.bodyHtml }); }}
+                            toolbarExtra={<>{applied && <button type="button" className={`${styles.saveTemplate} ${templateEdited ? styles.saveTemplateLit : ""}`} disabled={busy || savingTemplate || !templateEdited} onMouseDown={(event) => event.preventDefault()} onClick={() => void saveTemplate()} title={templateEdited ? `Make this the “${applied.name}” template for everyone in the workspace` : `This draft matches the “${applied.name}” template`}>{savingTemplate ? "Saving…" : templateEdited ? "Save as template" : "Template"}</button>}<button type="button" className={styles.attachButton} aria-label="Attach files" title={`Attach files — up to ${MAX_ATTACHMENTS}, ${formatBytes(MAX_ATTACHMENT_BYTES)} total`} disabled={busy} onMouseDown={(event) => event.preventDefault()} onClick={() => fileInput.current?.click()}><Paperclip size={15} />{attachments.length > 0 && <span>{attachments.length}</span>}</button></>} />
                           {unresolved && <div role="alert" className={styles.error}>Fill in or remove the remaining {"{{tags}}"} before sending.</div>}
                           {rewriteError && <div role="alert" className={styles.error}>{rewriteError}</div>}
+                          {templateStatus && <div role={templateStatus.kind === "error" ? "alert" : "status"} className={templateStatus.kind === "error" ? styles.error : styles.success}>{templateStatus.kind === "ok" && <CheckCircle2 size={17} />}{templateStatus.text}</div>}
                           {sendError && <div role="alert" className={styles.error}>{sendError}</div>}
-                          <div className={styles.composeFooter}><span><CheckCircle2 size={14} />{undoDraft ? "Rewritten in a " + tones[undoDraft.tone].label.toLowerCase() + " tone — edit freely, or undo" : "Saved to this contact's history after sending"}</span><button type="submit" disabled={busy || unresolved || !subject.trim() || !hasMessage} className={styles.primaryButton}>{sending ? <LoaderCircle size={16} className={styles.spin} /> : <Send size={16} />}{sending ? "Sending…" : "Send email"}</button></div>
+                          <div className={styles.composeFooter}><span><CheckCircle2 size={14} />{undoDraft ? "Rewritten in a " + tones[undoDraft.tone].label.toLowerCase() + " tone — edit freely, or undo" : "Saved to this contact's history after sending"}{dirty && <button type="button" className={styles.textButton} disabled={busy} onClick={() => { resetDraft(); setView("emails"); }}>Discard draft</button>}</span><button type="submit" disabled={busy || unresolved || !subject.trim() || !hasMessage} className={styles.primaryButton}>{sending ? <LoaderCircle size={16} className={styles.spin} /> : <Send size={16} />}{sending ? "Sending…" : "Send email"}</button></div>
                         </form>
                       )}
                     </section>

@@ -163,6 +163,10 @@
 .formatToolbar select:focus-visible { outline:2px solid #b48acc; outline-offset:2px; }
 .formatDivider { height:17px; width:1px; background:#e6dced; margin:0 3px; }
 .toolbarEnd { display:flex; align-items:center; gap:6px; margin-left:auto; min-width:0; }
+.formatToolbar .saveTemplate { display:inline-flex; align-items:center; width:auto; height:28px; padding:0 10px; border:1px solid #e8dfee; border-radius:6px; background:#fff; color:#b7a6c3; font-size:11px; font-weight:600; white-space:nowrap; transition:background .2s, color .2s, box-shadow .2s; }
+.formatToolbar .saveTemplateLit { background:linear-gradient(100deg,#6b21a8,#9333ea); border-color:transparent; color:#fff; box-shadow:0 0 0 3px rgba(107,33,168,.16); }
+.formatToolbar .saveTemplateLit:hover { background:linear-gradient(100deg,#5b1b8f,#7e22ce); }
+.composeFooter > span button { margin-left:10px; }
 .attachButton { position:relative; }
 .attachButton span { position:absolute; top:-4px; right:-4px; min-width:14px; height:14px; padding:0 3px; border-radius:7px; background:#6b21a8; color:#fff; font-size:9px; font-weight:700; line-height:14px; text-align:center; }
 .attachmentRow { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 16px; border-bottom:1px solid #f1eaf6; }

@@ -8,8 +8,11 @@ import { templateTags, type EmailTemplate, type TemplateTag } from "@/lib/email-
 import styles from "./contact-record-modal.module.css";
 
 export type TemplateDraft = NonNullable<Awaited<ReturnType<typeof prepareTemplateDraft>>["data"]>;
+export type AppliedTemplate = { key: string; name: string; fields: Record<string, string>; invoiceNumber: string };
 type Props = { contactId: string; firstName: string; templates: EmailTemplate[]; value: string; disabled: boolean; dirty: boolean;
-  onChange: (html: string, text: string) => void; onApply: (draft: TemplateDraft) => void;
+  onChange: (html: string, text: string) => void;
+  /** The draft, plus what made it: which template and the answers given, so an edited copy can be saved back as the template. */
+  onApply: (draft: TemplateDraft, source: AppliedTemplate) => void;
   /** Rendered beside the template dropdown — the attach button lives here. */
   toolbarExtra?: React.ReactNode };
 
@@ -39,7 +42,11 @@ export default function TemplateEmailEditor(props: Props) {
       const result = response.data!;
       if (version !== request.current) return;
       if (latest.current.disabled) { dismiss(); return; }
-      if (!result.missing.length && (apply || !latest.current.dirty)) { latest.current.onApply(result); dismiss(); }
+      if (!result.missing.length && (apply || !latest.current.dirty)) {
+        const name = latest.current.templates.find(template => template.key === selected)?.name ?? selected;
+        latest.current.onApply(result, { key: selected, name, fields: initial ? {} : fields, invoiceNumber: initial ? "" : invoice });
+        dismiss();
+      }
       else setPreview(result);
     } catch (caught) { if (version === request.current) setError(caught instanceof Error ? caught.message : "Could not load this template. Your draft is unchanged."); }
     finally { if (version === request.current) { lock.current = false; setBusy(false); } }
