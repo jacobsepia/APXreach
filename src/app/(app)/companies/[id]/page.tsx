@@ -9,8 +9,11 @@ import {
   db,
   deals,
   syncedInvoices,
+  pipelines,
   pipelineStages,
 } from "@/db";
+import { QuickCreate } from "@/components/quick-create";
+import { LogCall } from "@/components/log-call";
 import { daysBetween, money, monthYear, shortDate } from "@/lib/format";
 import { Avatar, Card, Caps, LedgerDot, Pill } from "@/components/ui";
 import { TimelineComposer } from "@/components/timeline-composer";
@@ -24,7 +27,6 @@ import {
   FileText,
   Mail,
   Phone,
-  Plus,
   StickyNote,
   Users,
 } from "lucide-react";
@@ -86,7 +88,7 @@ export default async function CompanyPage({
     .where(and(eq(companies.id, id), eq(companies.workspaceId, workspaceId)));
   if (!company) notFound();
 
-  const [people, openDeals, timeline, invoices, [connection]] = await Promise.all([
+  const [people, openDeals, timeline, invoices, [connection], stages] = await Promise.all([
     db.select().from(contacts).where(and(eq(contacts.companyId, id), eq(contacts.workspaceId, workspaceId))),
     db
       .select({
@@ -115,6 +117,12 @@ export default async function CompanyPage({
       .from(connections)
       .where(eq(connections.workspaceId, workspaceId))
       .limit(1),
+    db
+      .select({ id: pipelineStages.id, name: pipelineStages.name })
+      .from(pipelineStages)
+      .innerJoin(pipelines, eq(pipelineStages.pipelineId, pipelines.id))
+      .where(eq(pipelines.workspaceId, workspaceId))
+      .orderBy(pipelines.displayOrder, pipelineStages.displayOrder),
   ]);
 
   const synced = company.lifecycleStage === "customer";
@@ -168,14 +176,18 @@ export default async function CompanyPage({
           <ComposeEmail
             recipients={people.map((p) => ({ ...p, companyName: company.name }))}
           />
-          <button className="flex h-8 items-center gap-1.5 rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-foreground">
-            <Phone className="size-3.5" />
-            <span>Log call</span>
-          </button>
-          <button className="flex h-8 items-center gap-1.5 rounded-[10px] bg-[image:var(--gradient-cta)] px-3.5 text-[13px] font-medium text-white">
-            <Plus className="size-3.5" />
-            <span>New deal</span>
-          </button>
+          <LogCall
+            companyId={company.id}
+            className="flex h-8 items-center gap-1.5 rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-foreground hover:border-[#6b21a8]"
+          />
+          <QuickCreate
+            only="deal"
+            buttonLabel="New deal"
+            companies={[{ id: company.id, name: company.name }]}
+            stages={stages}
+            dealValues={{ companyId: company.id }}
+            returnTo={`/companies/${company.id}`}
+          />
           <RecordActions
             kind="company"
             id={company.id}

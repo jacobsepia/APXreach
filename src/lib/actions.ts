@@ -116,6 +116,12 @@ export async function createDeal(formData: FormData): Promise<void> {
     wonAt: stage.kind === "won" ? new Date() : null,
   });
   revalidatePath("/deals");
+  /* Back to the page the button was on, when it said; only a path on this site. */
+  const returnTo = optionalText.parse(formData.get("returnTo") ?? "");
+  if (returnTo && /^\/[^/\\]/.test(returnTo)) {
+    revalidatePath(returnTo);
+    redirect(returnTo);
+  }
   redirect("/deals");
 }
 

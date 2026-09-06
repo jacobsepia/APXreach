@@ -8,7 +8,7 @@ import { QuickCreate } from "@/components/quick-create";
 import { RecordActions } from "@/components/record-actions";
 import { ComposeEmail } from "@/components/compose-email";
 import { ContactRecordModal } from "@/components/contact-record-modal";
-import { Download } from "lucide-react";
+import { ImportContacts } from "@/components/import-contacts";
 
 export const dynamic = "force-dynamic";
 
@@ -75,10 +75,7 @@ export default async function ContactsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button className={chip.replace("text-muted-foreground", "text-foreground")}>
-            <Download className="size-3.5" />
-            <span>Import CSV</span>
-          </button>
+          <ImportContacts className={chip.replace("text-muted-foreground", "text-foreground")} />
           <QuickCreate companies={companyOptions} stages={[]} only="contact" buttonLabel="Add contact" />
         </div>
       </div>

@@ -11,6 +11,7 @@ import {
   Submit,
   TaskFields,
   type CompanyOption,
+  type DealValues,
   type StageOption,
 } from "@/components/record-forms";
 
@@ -31,6 +32,8 @@ export function QuickCreate({
   variant = "topbar",
   only,
   buttonLabel,
+  dealValues,
+  returnTo,
 }: {
   companies: CompanyOption[];
   stages: StageOption[];
@@ -38,6 +41,10 @@ export function QuickCreate({
   /** When set, the button opens this dialog directly instead of the menu. */
   only?: Kind;
   buttonLabel?: string;
+  /** Pre-filled deal fields — the company page opens "New deal" with itself chosen. */
+  dealValues?: DealValues;
+  /** Where to land after creating; the page the button was on, usually. */
+  returnTo?: string;
 }) {
   const [open, setOpen] = useState<Kind | null>(null);
   const [menu, setMenu] = useState(false);
@@ -100,7 +107,8 @@ export function QuickCreate({
       {open === "deal" && (
         <Dialog title="New deal" onClose={close}>
           <form action={createDeal} className="flex flex-col gap-3">
-            <DealFields companies={companies} stages={stages} />
+            {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
+            <DealFields companies={companies} stages={stages} values={dealValues} />
             <Submit>Create deal</Submit>
           </form>
         </Dialog>
