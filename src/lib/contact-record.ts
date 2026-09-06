@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { requireTenantOrThrow } from "@/lib/workspace";
 import { sanitizeEmailHtml } from "@/lib/email-content";
 import { workspaceTemplates } from "@/lib/email-template-store";
+import { emailSignature } from "@/lib/email-signature";
 import { activities, contacts, db, deals, emailMessages, mailboxes, pipelineStages } from "@/db";
 
 /** Read this member’s contact and its history only when the modal opens. */
@@ -14,7 +15,7 @@ export async function loadContactRecord(rawId: string) {
   const id = z.uuid().parse(rawId);
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) throw new Error("Sign in again to view this contact.");
-  const { workspaceId } = await requireTenantOrThrow();
+  const { workspaceId, workspaceName, userName } = await requireTenantOrThrow();
   const [contact] = await db.select({ id: contacts.id }).from(contacts)
     .where(and(eq(contacts.id, id), eq(contacts.workspaceId, workspaceId))).limit(1);
   if (!contact) throw new Error("Contact unavailable.");
@@ -46,5 +47,5 @@ export async function loadContactRecord(rawId: string) {
       .limit(1),
     workspaceTemplates(workspaceId),
   ]);
-  return { activities: history, deals: associatedDeals, messages: messages.map(message => ({ ...message, bodyHtml: message.bodyHtml ? sanitizeEmailHtml(message.bodyHtml) : null })), mailbox: connectedMailboxes[0] ?? null, templates };
+  return { activities: history, deals: associatedDeals, messages: messages.map(message => ({ ...message, bodyHtml: message.bodyHtml ? sanitizeEmailHtml(message.bodyHtml) : null })), mailbox: connectedMailboxes[0] ?? null, templates, signature: emailSignature(userName, workspaceName, connectedMailboxes[0]?.emailAddress ?? "") };
 }

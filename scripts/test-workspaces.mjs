@@ -135,6 +135,13 @@ try {
   const templateMigration = readFileSync("migrations/20260905_email_templates.sql", "utf8");
   await query.query(templateMigration); await query.query(templateMigration);
   const templateFields = { key: "checking-in", name: "Alpha greeting", subject: "Hello {{first_name}}", bodyHtml: "<p>Hi {{first_name}}, from ALPHA_TEMPLATE.</p>", revision: "" };
+  for (const [person, address] of [[a, "alpha.sender@example.test"], [b, "beta.sender@example.test"]]) {
+    await query`INSERT INTO mailboxes (workspace_id,user_id,provider,provider_label,email_address,status) VALUES (${person.workspace},${person.id},'zoho','QA mailbox',${address},'connected')`;
+  }
+  const signatureRecord = await action("loadContactRecord", a.cookie, a.contact);
+  ok(signatureRecord, "sender signature on contact record");
+  assert.ok(signatureRecord.text.includes("alpha.sender@example.test"));
+  assert.ok(!signatureRecord.text.includes("beta.sender@example.test"));
   ok(await action("saveEmailTemplate", a.cookie, templateFields, "/settings/templates"), "save workspace template");
   const savedTemplate = (await query`SELECT * FROM email_templates WHERE workspace_id=${a.workspace}`)[0];
   assert.equal(savedTemplate.name, "Alpha greeting");
@@ -149,6 +156,9 @@ try {
   denied(await action("prepareTemplateDraft", a.cookie, { key: "checking-in", contactId: b.contact }), "foreign template contact");
   const congrats = await action("prepareTemplateDraft", a.cookie, { key: "congratulations", contactId: a.contact });
   ok(congrats, "missing milestone prompt"); assert.ok(congrats.text.includes('"missing":["milestone"]'));
+  assert.ok(congrats.text.includes("Alpha Workspace"));
+  assert.ok(congrats.text.includes("alpha.sender@example.test"));
+  assert.ok(!congrats.text.includes("beta.sender@example.test"));
   const personalized = await action("prepareTemplateDraft", a.cookie, { key: "congratulations", contactId: a.contact, fields: JSON.stringify({ milestone: "your new office", first_name: "Do not override" }) });
   ok(personalized, "manual milestone"); assert.ok(personalized.text.includes("your new office")); assert.ok(!personalized.text.includes("Do not override"));
   const unsafe = await action("saveEmailTemplate", a.cookie, { ...templateFields, revision: savedTemplate.revision, bodyHtml: '<p>Safe {{first_name}}</p><script>alert(1)</script>' });

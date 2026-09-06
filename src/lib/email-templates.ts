@@ -1,6 +1,8 @@
+import { emailSignature } from "./email-signature";
+
 export const templateTags = {
   first_name: "First name", last_name: "Last name", company_name: "Customer company",
-  sender_name: "Your name", sender_company: "Your company", milestone: "Milestone to celebrate",
+  sender_name: "Your name", sender_company: "Your company", sender_email: "Your connected email", sender_signature: "Your full signature", milestone: "Milestone to celebrate",
   follow_up_topic: "Conversation topic", next_step: "Suggested next step",
   invoice_number: "Invoice number", invoice_balance: "Remaining invoice balance", invoice_due_date: "Invoice due date",
 } as const;
@@ -9,7 +11,7 @@ export type EmailTemplate = { key: string; name: string; subject: string; bodyHt
 export function escapeHtml(text: string) { return text.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!); }
 function paragraphs(text: string) { return text.split("\n\n").map(p => `<p>${escapeHtml(p).replaceAll("\n", "<br>")}</p>`).join(""); }
 function starter(key: string, name: string, subject: string, body: string, invoiceMode: EmailTemplate["invoiceMode"] = "none"): EmailTemplate {
-  return { key, name, subject, bodyHtml: paragraphs(`Hi {{first_name}},\n\n${body}\n\nBest,\n{{sender_name}}`), invoiceMode, revision: null };
+  return { key, name, subject, bodyHtml: paragraphs(`Hi {{first_name}},\n\n${body}\n\nBest,\n{{sender_signature}}`), invoiceMode, revision: null };
 }
 export const starterTemplates: EmailTemplate[] = [
   starter("checking-in", "Just checking in", "A quick hello", "How are things at {{company_name}}? I wanted to check in and see whether there’s anything you need from us.\n\nIf something’s come up—or there’s anything we could be doing better—just reply here."),
@@ -29,8 +31,10 @@ export function tagsIn(text: string): string[] {
 }
 export function hasUnresolvedTags(text: string) { return /\{\{|\}\}/.test(text); }
 export function renderEmailTemplate(template: Pick<EmailTemplate, "subject" | "bodyHtml">, values: Record<string, string>) {
-  const missing = tagsIn(template.subject + template.bodyHtml).filter(tag => !Object.hasOwn(templateTags, tag) || !values[tag]?.trim());
+  const signature = emailSignature(values.sender_name ?? "", values.sender_company ?? "", values.sender_email ?? "");
+  const missing = tagsIn(template.subject + template.bodyHtml).filter(tag => !Object.hasOwn(templateTags, tag) || !(tag === "sender_signature" ? signature.text : values[tag])?.trim());
   const replace = (source: string, html: boolean) => source.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (token, key: string) => {
+    if (key.trim() === "sender_signature" && signature.text) return html ? signature.html : signature.text.replaceAll("\n", " · ");
     const value = values[key.trim()];
     return value?.trim() ? (html ? escapeHtml(value.trim()) : value.trim()) : token;
   });
