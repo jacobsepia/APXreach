@@ -4,9 +4,11 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDownLeft, ArrowUpRight, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, Clock3, FileText, Inbox, LoaderCircle, Mail, MessageSquareText, Phone, Search, Send, StickyNote, UserRound, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, Clock3, FileText, Inbox, LoaderCircle, Mail, MessageSquareText, Phone, Search, Send, StickyNote, Undo2, UserRound, X } from "lucide-react";
 import { loadContactRecord } from "@/lib/contact-record";
 import { sendEmailFromRecord } from "@/lib/actions";
+import { rewriteEmailTone } from "@/lib/email-tone-actions";
+import { toneList, tones, type Tone } from "@/lib/email-tone-list";
 import { money, relativeDay, shortDate } from "@/lib/format";
 import { StagePill } from "@/components/ui";
 import styles from "./contact-record-modal.module.css";
@@ -73,9 +75,15 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
   const [sendError, setSendError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
+  /* Tone rewriting: which pill is working, what went wrong, and the draft from
+     just before the last rewrite so Undo is one click and never a guess. */
+  const [rewriting, setRewriting] = useState<Tone | null>(null);
+  const [rewriteError, setRewriteError] = useState<string | null>(null);
+  const [undoDraft, setUndoDraft] = useState<{ body: string; bodyHtml: string; tone: Tone } | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const sendingRef = useRef(false);
+  const rewritingRef = useRef(false);
   const signatureInitialized = useRef(false);
   const signatureText = useRef("");
   const name = (contact.firstName + " " + contact.lastName).trim();
@@ -84,11 +92,40 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
   const dirty = Boolean(subject.trim() || hasMessage);
   const unresolved = hasUnresolvedTags(subject + body);
 
+  const busy = sending || rewriting !== null;
+  const clearRewrite = () => { setUndoDraft(null); setRewriteError(null); };
+
   const requestClose = () => {
-    if (sendingRef.current) return;
+    if (sendingRef.current || rewritingRef.current) return;
     if (dirty) { setConfirmClose(true); return; }
-    setBody(""); setBodyHtml(""); signatureInitialized.current = false; signatureText.current = "";
+    setBody(""); setBodyHtml(""); signatureInitialized.current = false; signatureText.current = ""; clearRewrite();
     setOpen(false);
+  };
+
+  const rewrite = async (tone: Tone) => {
+    if (rewritingRef.current || sendingRef.current || !data?.mailbox) return;
+    if (!hasMessage) { setRewriteError("Write a message above your signature first, then pick a tone."); return; }
+    if (!data.rewriteReady) { setRewriteError("Tone rewriting is not set up yet. Add OPENAI_API_KEY to the server's environment variables."); return; }
+    rewritingRef.current = true;
+    setRewriting(tone); setRewriteError(null); setSendError(null);
+    const before = { body, bodyHtml, tone };
+    const form = new FormData();
+    form.set("tone", tone); form.set("bodyHtml", bodyHtml); form.set("contactName", name);
+    try {
+      const response = await rewriteEmailTone(form);
+      if (response.error) throw new Error(response.error);
+      setUndoDraft(before);
+      setBodyHtml(response.data!.bodyHtml); setBody(response.data!.text);
+    } catch (caught) {
+      setRewriteError(caught instanceof Error ? caught.message : "Could not rewrite right now. Your draft is unchanged.");
+    } finally {
+      rewritingRef.current = false;
+      setRewriting(null);
+    }
+  };
+  const undoRewrite = () => {
+    if (!undoDraft || busy) return;
+    setBodyHtml(undoDraft.bodyHtml); setBody(undoDraft.body); clearRewrite();
   };
   const compose = () => { setView("compose"); setSendError(null); setNotice(null); };
   const refresh = () => setAttempt((value) => value + 1);
@@ -128,7 +165,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
 
   const send = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (sendingRef.current || !data?.mailbox || !contact.email) return;
+    if (sendingRef.current || rewritingRef.current || !data?.mailbox || !contact.email) return;
     if (!hasMessage) { setSendError("Write a message above your signature before sending."); return; }
     if (unresolved) { setSendError("Fill in or remove the remaining {{tags}} before sending."); return; }
     sendingRef.current = true;
@@ -144,7 +181,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
     if (invoiceReference) form.set("templateInvoice", JSON.stringify(invoiceReference));
     try {
       await sendEmailFromRecord(form);
-      setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); setQuery(""); signatureInitialized.current = false; signatureText.current = "";
+      setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); setQuery(""); signatureInitialized.current = false; signatureText.current = ""; clearRewrite();
       setView("emails");
       setNotice("Email sent from " + data.mailbox.emailAddress + ".");
       refresh();
@@ -188,7 +225,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
             {confirmClose && <div className={styles.discardBar} role="alert">
               <span>You have an unsent draft. Discard it and close?</span>
               <button type="button" className={styles.secondaryButton} onClick={() => { setConfirmClose(false); setView("compose"); }}>Keep writing</button>
-              <button type="button" className={styles.textButton} onClick={() => { setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); signatureInitialized.current = false; signatureText.current = ""; setConfirmClose(false); setOpen(false); }}>Discard draft</button>
+              <button type="button" className={styles.textButton} onClick={() => { setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); signatureInitialized.current = false; signatureText.current = ""; clearRewrite(); setConfirmClose(false); setOpen(false); }}>Discard draft</button>
             </div>}
 
             <div className={styles.workspace}>
@@ -250,11 +287,24 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
                       </div>
                       {!data ? (!loading && !error && <p className={styles.muted}>Load the contact to check your mailbox.</p>) : !data.mailbox ? <div className={styles.empty}><Mail size={30} /><h4>Connect your mailbox</h4><p>A connected mailbox is needed to send from Reach.</p><Link href="/settings" className={styles.primaryButton}>Open Settings</Link></div> : !contact.email ? <div className={styles.empty}><h4>No email address yet</h4><p>Add an email address using the contact's edit control.</p></div> : (
                         <form onSubmit={send} className={styles.composeForm}>
-                          <label className={styles.subjectField}><span>Subject</span><input name="subject" aria-label="Subject" placeholder="Give your email a subject" value={subject} onChange={(event) => setSubject(event.target.value)} required disabled={sending} maxLength={998} autoFocus /></label>
-                          <TemplateEmailEditor contactId={contact.id} templates={data.templates} value={bodyHtml} disabled={sending} firstName={contact.firstName} dirty={dirty} onChange={(html, text) => { setBodyHtml(html); setBody(text); }} onApply={draft => { setSubject(draft.subject); setBodyHtml(draft.bodyHtml); setBody(draft.text); setInvoiceReference(draft.invoiceReference); setSendError(null); }} />
+                          <div className={styles.subjectField}>
+                            <label><span>Subject</span><input name="subject" aria-label="Subject" placeholder="Give your email a subject" value={subject} onChange={(event) => setSubject(event.target.value)} required disabled={busy} maxLength={998} autoFocus /></label>
+                            <div className={styles.tonePills} role="group" aria-label="Rewrite the message in a tone">
+                              {undoDraft ? (
+                                <button type="button" className={`${styles.tonePill} ${styles.undoPill}`} disabled={busy} onClick={undoRewrite} title={"Put back your draft from before the " + tones[undoDraft.tone].label + " rewrite"}><Undo2 size={11} />Undo rewrite</button>
+                              ) : <span>Rewrite</span>}
+                              {toneList.map((tone) => (
+                                <button key={tone} type="button" className={styles.tonePill} aria-busy={rewriting === tone} disabled={busy} onClick={() => void rewrite(tone)} title={tones[tone].hint + " Rewrites the message; your names, amounts, dates and signature stay as they are. Nothing is sent."}>
+                                  {rewriting === tone && <LoaderCircle size={11} className={styles.spin} />}{tones[tone].label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <TemplateEmailEditor contactId={contact.id} templates={data.templates} value={bodyHtml} disabled={busy} firstName={contact.firstName} dirty={dirty} onChange={(html, text) => { setBodyHtml(html); setBody(text); }} onApply={draft => { setSubject(draft.subject); setBodyHtml(draft.bodyHtml); setBody(draft.text); setInvoiceReference(draft.invoiceReference); setSendError(null); clearRewrite(); }} />
                           {unresolved && <div role="alert" className={styles.error}>Fill in or remove the remaining {"{{tags}}"} before sending.</div>}
+                          {rewriteError && <div role="alert" className={styles.error}>{rewriteError}</div>}
                           {sendError && <div role="alert" className={styles.error}>{sendError}</div>}
-                          <div className={styles.composeFooter}><span><CheckCircle2 size={14} />Saved to this contact's history after sending</span><button type="submit" disabled={sending || unresolved || !subject.trim() || !hasMessage} className={styles.primaryButton}>{sending ? <LoaderCircle size={16} className={styles.spin} /> : <Send size={16} />}{sending ? "Sending…" : "Send email"}</button></div>
+                          <div className={styles.composeFooter}><span><CheckCircle2 size={14} />{undoDraft ? "Rewritten in a " + tones[undoDraft.tone].label.toLowerCase() + " tone — edit freely, or undo" : "Saved to this contact's history after sending"}</span><button type="submit" disabled={busy || unresolved || !subject.trim() || !hasMessage} className={styles.primaryButton}>{sending ? <LoaderCircle size={16} className={styles.spin} /> : <Send size={16} />}{sending ? "Sending…" : "Send email"}</button></div>
                         </form>
                       )}
                     </section>

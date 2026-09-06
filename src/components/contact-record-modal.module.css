@@ -141,7 +141,16 @@
 .provider { display:inline-flex; align-items:center; flex-shrink:0; gap:5px; margin-left:auto; font-size:9px; color:#789155; background:#f0f5e9; border:1px solid #e3ebd7; border-radius:999px; padding:4px 8px; white-space:nowrap; }
 .provider > span { width:5px; height:5px; border-radius:50%; background:#9abb6b; }
 .subjectField { display:flex; align-items:center; gap:10px; padding:9px 16px; border-bottom:1px solid #f1eaf6; font-size:12px; }
-.subjectField > span { color:#ab96ba; width:55px; flex-shrink:0; }
+.subjectField label { display:flex; flex:1; align-items:center; gap:10px; min-width:0; }
+.subjectField label > span { color:#ab96ba; width:55px; flex-shrink:0; }
+.tonePills { display:flex; align-items:center; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end; gap:4px; }
+.tonePills > span { margin-right:4px; font-size:9px; font-weight:650; color:#ab96ba; text-transform:uppercase; letter-spacing:.06em; }
+.tonePill { display:inline-flex; align-items:center; gap:4px; height:22px; padding:0 9px; border:1px solid #ddc9ec; border-radius:999px; background:#f7f1fb; color:#713c92; font-size:10px; font-weight:600; white-space:nowrap; }
+.tonePill:hover:not(:disabled) { background:#eadcf4; border-color:#c9a9de; }
+.tonePill:disabled { opacity:.55; cursor:default; }
+.tonePill[aria-busy=true] { background:#eadcf4; }
+.tonePill:focus-visible { outline:2px solid #b48acc; outline-offset:2px; }
+.undoPill { border-style:dashed; background:#fff; color:#8f759f; }
 .subjectField input { flex:1; min-width:0; padding:4px 0; color:#654772; background:none; border:0; outline:none; }
 .subjectField:focus-within { box-shadow:inset 3px 0 #b088cb; }
 .subjectField input::placeholder { color:#b09bbd; }

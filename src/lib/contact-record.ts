@@ -47,5 +47,12 @@ export async function loadContactRecord(rawId: string) {
       .limit(1),
     workspaceTemplates(workspaceId),
   ]);
-  return { activities: history, deals: associatedDeals, messages: messages.map(message => ({ ...message, bodyHtml: message.bodyHtml ? sanitizeEmailHtml(message.bodyHtml) : null })), mailbox: connectedMailboxes[0] ?? null, templates, signature: emailSignature(userName, workspaceName, connectedMailboxes[0]?.emailAddress ?? "") };
+  return {
+    activities: history, deals: associatedDeals,
+    messages: messages.map(message => ({ ...message, bodyHtml: message.bodyHtml ? sanitizeEmailHtml(message.bodyHtml) : null })),
+    mailbox: connectedMailboxes[0] ?? null, templates,
+    signature: emailSignature(userName, workspaceName, connectedMailboxes[0]?.emailAddress ?? ""),
+    /* Whether the tone pills can do anything. The key itself never leaves the server. */
+    rewriteReady: Boolean(process.env.OPENAI_API_KEY?.trim()),
+  };
 }

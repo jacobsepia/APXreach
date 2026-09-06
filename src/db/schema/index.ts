@@ -29,6 +29,9 @@ export const workspaces = pgTable("workspaces", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  /* Today's AI tone rewrites, so a stuck button cannot run up a bill overnight. */
+  rewriteCount: integer("rewrite_count").default(0).notNull(),
+  rewriteCountDay: date("rewrite_count_day"),
 });
 
 export const workspaceMembers = pgTable("workspace_members", {
