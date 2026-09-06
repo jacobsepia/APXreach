@@ -34,7 +34,9 @@ export default function EmailEditor({ value, disabled, firstName, onChange, tool
     undo: current.can().undo(), redo: current.can().redo(), empty: current.isEmpty,
   }) : null });
 
-  useEffect(() => { editor?.setEditable(!disabled); }, [editor, disabled]);
+  // Loading/sending is not an edit. Emitting an update here can overwrite a
+  // freshly-applied template with the editor's previous content.
+  useEffect(() => { editor?.setEditable(!disabled, false); }, [editor, disabled]);
   useEffect(() => {
     if (editor && value !== editor.getHTML() && !(value === "" && editor.isEmpty)) editor.commands.setContent(value || "<p></p>", { emitUpdate: false });
   }, [editor, value]);
