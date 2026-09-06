@@ -132,18 +132,28 @@ export default async function InboxPage() {
     };
   });
 
+  /* One line above the panes: the title, the counts, the mailbox and when it
+     was last read, and the button. The messages are the page; the header is
+     a caption, and a caption does not get three rows. */
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
-            <span className="gradient-text-flow">Inbox</span>
-          </h1>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
-            {messages.length} messages · {inboundCount} received · only mail to or from
-            people on a record
-          </p>
-        </div>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <h1 className="font-display text-xl font-bold tracking-[-0.035em]">
+          <span className="gradient-text-flow">Inbox</span>
+        </h1>
+        <p className="min-w-0 flex-1 truncate text-xs text-[var(--text-tertiary)]">
+          {messages.length} messages · {inboundCount} received
+          {refreshed.map((box) => (
+            <span key={box.id}>
+              {" · "}
+              {box.providerLabel} · {box.emailAddress}
+              {box.lastPolledAt ? ` · checked ${stamp.format(box.lastPolledAt)}` : ""}
+              {box.lastError && (
+                <span className="ml-2 font-medium text-[#b91c1c]">{box.lastError}</span>
+              )}
+            </span>
+          ))}
+        </p>
         <form action={pollMailboxesNow}>
           <button
             type="submit"
@@ -154,16 +164,6 @@ export default async function InboxPage() {
           </button>
         </form>
       </div>
-
-      {refreshed.map((box) => (
-        <p key={box.id} className="text-xs text-[var(--text-tertiary)]">
-          {box.providerLabel} · {box.emailAddress}
-          {box.lastPolledAt ? ` · last checked ${stamp.format(box.lastPolledAt)}` : ""}
-          {box.lastError && (
-            <span className="ml-2 font-medium text-[#b91c1c]">{box.lastError}</span>
-          )}
-        </p>
-      ))}
 
       <InboxView items={items} from={from} />
     </div>
