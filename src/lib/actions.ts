@@ -26,6 +26,8 @@ import { getProvider } from "@/lib/providers";
 import { getMailboxProvider } from "@/lib/mailbox/providers";
 import { sendFromMailbox } from "@/lib/mailbox/send";
 import { prepareEmailBody } from "@/lib/email-content";
+import { hasUnresolvedTags } from "@/lib/email-templates";
+import { contactTemplateContext } from "@/lib/email-template-store";
 import { clientCredentials, revokeToken } from "@/lib/oauth";
 
 /** Every mutation resolves membership on the server, never from form fields. */
@@ -473,6 +475,19 @@ export async function sendEmailFromRecord(formData: FormData): Promise<void> {
     .parse(formData.get("to"));
   const subject = trimmed.min(1, "Give it a subject.").parse(formData.get("subject"));
   const { text, html } = prepareEmailBody(z.string().parse(formData.get("body")), z.string().optional().parse(formData.get("bodyHtml") ?? undefined));
+  if (subject.length > 998 || /[\r\n]/.test(subject)) throw new Error("Use a single-line subject of at most 998 characters.");
+  if (hasUnresolvedTags(subject + text + (html ?? ""))) throw new Error("Fill in or remove the remaining {{tags}} before sending.");
+  if (formData.has("templateInvoice")) {
+    if (!contactId) throw new Error("Choose a contact for this invoice email.");
+    const reference = z.object({ number: z.string().max(200), dueDate: z.string(), outstandingCents: z.number().int().positive(), mode: z.enum(["none", "open", "overdue"]), currency: z.string() }).parse(JSON.parse(z.string().max(2000).parse(formData.get("templateInvoice"))));
+    const context = await contactTemplateContext(wsId, contactId, session.user.name, "");
+    const matches = context.invoices.filter(invoice => invoice.number === reference.number);
+    const current = matches.length === 1 ? matches[0] : undefined;
+    const today = new Date().toISOString().slice(0, 10);
+    if (!current || current.outstandingCents !== reference.outstandingCents || current.dueDate !== reference.dueDate || context.currency !== reference.currency || (reference.mode === "overdue" && current.dueDate >= today) || (reference.mode === "open" && current.dueDate < today)) {
+      throw new Error("This invoice changed or is no longer eligible. Your draft is kept—select the template again to refresh its invoice details.");
+    }
+  }
 
   const [mailbox] = await db
     .select()

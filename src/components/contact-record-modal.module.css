@@ -153,6 +153,15 @@
 .formatToolbar button[aria-pressed=true] { background:#eadcf4; border-color:#d9c4e8; color:#713c92; }
 .formatToolbar select:focus-visible { outline:2px solid #b48acc; outline-offset:2px; }
 .formatDivider { height:17px; width:1px; background:#e6dced; margin:0 3px; }
+.toolbarEnd { margin-left:auto; min-width:0; }
+.formatToolbar .toolbarEnd select { max-width:195px; background:#f2eaf9; color:#713c92; border-color:#ddc9ec; font-weight:600; }
+.templatePanel { flex-shrink:1; min-height:0; max-height:220px; overflow:auto; padding:10px 14px; background:#faf6fe; border-bottom:1px solid #e8dced; color:#795d89; font-size:11px; }
+.templatePanelHeading, .templatePanelActions { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.templatePanelHeading a { color:#8546a6; text-decoration:underline; }
+.templatePanel p { margin:6px 0; }
+.templatePanel label { display:inline-flex; flex-direction:column; gap:3px; margin:6px 12px 6px 0; max-width:100%; }
+.templatePanel input, .templatePanel select { border:1px solid #ddcfe8; padding:5px 8px; border-radius:6px; background:#fff; color:#51355f; min-width:190px; max-width:100%; }
+.templatePanelActions { justify-content:flex-end; margin-top:6px; }
 .editorSurface { position:relative; display:flex; flex:1; min-height:80px; overflow:auto; background:#fff; }
 .editorMount { display:flex; flex-direction:column; flex:1; min-width:0; }
 .richInput { flex:1; padding:16px 18px; min-height:100%; outline:none; font:14px/1.6 Arial,sans-serif; color:#302b36; overflow-wrap:anywhere; white-space:pre-wrap; }

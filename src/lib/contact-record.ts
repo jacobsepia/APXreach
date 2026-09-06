@@ -6,6 +6,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { requireTenantOrThrow } from "@/lib/workspace";
 import { sanitizeEmailHtml } from "@/lib/email-content";
+import { workspaceTemplates } from "@/lib/email-template-store";
 import { activities, contacts, db, deals, emailMessages, mailboxes, pipelineStages } from "@/db";
 
 /** Read this member’s contact and its history only when the modal opens. */
@@ -17,7 +18,7 @@ export async function loadContactRecord(rawId: string) {
   const [contact] = await db.select({ id: contacts.id }).from(contacts)
     .where(and(eq(contacts.id, id), eq(contacts.workspaceId, workspaceId))).limit(1);
   if (!contact) throw new Error("Contact unavailable.");
-  const [history, associatedDeals, messages, connectedMailboxes] = await Promise.all([
+  const [history, associatedDeals, messages, connectedMailboxes, templates] = await Promise.all([
     db.select({
       id: activities.id, type: activities.type, subject: activities.subject,
       body: activities.body, actorName: activities.actorName,
@@ -43,6 +44,7 @@ export async function loadContactRecord(rawId: string) {
       .from(mailboxes)
       .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.workspaceId, workspaceId), eq(mailboxes.status, "connected")))
       .limit(1),
+    workspaceTemplates(workspaceId),
   ]);
-  return { activities: history, deals: associatedDeals, messages: messages.map(message => ({ ...message, bodyHtml: message.bodyHtml ? sanitizeEmailHtml(message.bodyHtml) : null })), mailbox: connectedMailboxes[0] ?? null };
+  return { activities: history, deals: associatedDeals, messages: messages.map(message => ({ ...message, bodyHtml: message.bodyHtml ? sanitizeEmailHtml(message.bodyHtml) : null })), mailbox: connectedMailboxes[0] ?? null, templates };
 }

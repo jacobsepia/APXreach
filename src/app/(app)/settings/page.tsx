@@ -57,6 +57,8 @@ export default async function SettingsPage({
         </p>
       </div>
 
+      <Card className="px-[18px] py-4"><div className="flex items-center justify-between gap-4"><div><Caps>Email templates</Caps><p className="mt-2 text-sm text-muted-foreground">Personal greetings, follow-ups, and invoice reminders. Edit your ten workspace templates and their personalization tags.</p></div><Link href="/settings/templates" className="shrink-0 rounded-lg border border-input bg-white px-3 py-2 text-xs font-medium">Manage templates →</Link></div></Card>
+
       {error && (
         <Card className="border-[color-mix(in_srgb,var(--accent-hot)_35%,transparent)] px-[18px] py-3">
           <p className="text-[13px] font-medium text-[#b91c1c]">{error}</p>

@@ -7,12 +7,13 @@ import { TextStyleKit } from "@tiptap/extension-text-style";
 import TextAlign from "@tiptap/extension-text-align";
 import { AlignCenter, AlignLeft, AlignRight, Bold, Italic, List, ListOrdered, Redo2, RemoveFormatting, Underline, Undo2 } from "lucide-react";
 import styles from "./contact-record-modal.module.css";
+import { templateTags } from "@/lib/email-templates";
 
-type Props = { value: string; disabled: boolean; firstName: string; onChange: (html: string, text: string) => void };
+type Props = { value: string; disabled: boolean; firstName: string; onChange: (html: string, text: string) => void; toolbarEnd?: React.ReactNode; belowToolbar?: React.ReactNode; allowTags?: boolean };
 const fonts = ["Arial", "Verdana", "Georgia", "Tahoma", "Times New Roman", "Courier New"];
 const sizes = [10, 12, 14, 16, 18, 20, 24, 28, 32];
 
-export default function EmailEditor({ value, disabled, firstName, onChange }: Props) {
+export default function EmailEditor({ value, disabled, firstName, onChange, toolbarEnd, belowToolbar, allowTags }: Props) {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -61,7 +62,10 @@ export default function EmailEditor({ value, disabled, firstName, onChange }: Pr
       <button type="button" aria-label="Undo" title="Undo" disabled={disabled || !state.undo} onMouseDown={e => e.preventDefault()} onClick={() => editor.chain().focus().undo().run()}><Undo2 size={15} /></button>
       <button type="button" aria-label="Redo" title="Redo" disabled={disabled || !state.redo} onMouseDown={e => e.preventDefault()} onClick={() => editor.chain().focus().redo().run()}><Redo2 size={15} /></button>
       <button type="button" aria-label="Clear formatting" title="Clear formatting" disabled={disabled} onMouseDown={e => e.preventDefault()} onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().unsetTextAlign().run()}><RemoveFormatting size={15} /></button>
+      {allowTags && <select aria-label="Insert message tag" value="" disabled={disabled} onChange={e => { if (e.target.value) editor.chain().focus().insertContent(`{{${e.target.value}}}`).run(); }}><option value="">Insert tag…</option>{Object.entries(templateTags).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>}
+      {toolbarEnd && <div className={styles.toolbarEnd}>{toolbarEnd}</div>}
     </div>
+    {belowToolbar}
     <div className={styles.editorSurface}>
       {state.empty && <span className={styles.editorPlaceholder}>Hi {firstName},</span>}
       <EditorContent editor={editor} className={styles.editorMount} />

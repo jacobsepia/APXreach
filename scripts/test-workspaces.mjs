@@ -45,8 +45,9 @@ async function action(name, cookie, values, path = "/contacts") {
   return request(path, cookie, { method: "POST", headers: { "next-action": references.get(name) }, body: await encodeReply([form]) });
 }
 const passed = (name) => console.log("PASS " + name);
-const ok = (r, name) => { assert.ok(r.status < 400 && !r.text.includes(':E{"digest"'), name + ": " + r.status + " " + r.text.slice(0, 400)); };
-const denied = (r, name) => { assert.ok(r.status >= 400 || r.text.includes(':E{"digest"'), name + " must be denied"); };
+const templateError = (r) => /(?:^|\n)[0-9a-f]+:\{"error":"/.test(r.text);
+const ok = (r, name) => { assert.ok(r.status < 400 && !r.text.includes(':E{"digest"') && !templateError(r), name + ": " + r.status + " " + r.text.slice(0, 400)); };
+const denied = (r, name) => { assert.ok(r.status >= 400 || r.text.includes(':E{"digest"') || templateError(r), name + " must be denied"); };
 
 try {
   for (const value of [null, "javascript:alert(1)", "https://example.com", "//example.com", "/\\example.com", "/\n/example.com"]) {
@@ -118,7 +119,7 @@ try {
     await query`INSERT INTO email_messages (workspace_id,contact_id,company_id,direction,from_address,to_address,subject,body_text) VALUES (${person.workspace},${person.contact},${person.company},'outbound','qa@example.test','recipient@example.test',${label},${label + " full email content"})`;
   }
   passed("in-workspace company, contact, deal and task creation");
-  for (const page of ["/dashboard", "/companies", "/contacts", "/deals", "/tasks", "/settings", "/companies/" + a.company]) {
+  for (const page of ["/dashboard", "/companies", "/contacts", "/deals", "/tasks", "/settings", "/settings/templates", "/companies/" + a.company]) {
     const result = await request(page, a.cookie);
     assert.equal(result.status, 200, page);
     assert.ok(!result.text.includes("BETA_ONLY"), page + " leaked beta records");
@@ -131,6 +132,41 @@ try {
   assert.ok(foreignPage.status === 404 || foreignPage.text.includes("NEXT_HTTP_ERROR_FALLBACK;404"));
   assert.ok(!foreignPage.text.includes("BETA_ONLY"));
   passed("pages, direct company URLs, modal history and email bodies are tenant-scoped");
+  const templateMigration = readFileSync("migrations/20260905_email_templates.sql", "utf8");
+  await query.query(templateMigration); await query.query(templateMigration);
+  const templateFields = { key: "checking-in", name: "Alpha greeting", subject: "Hello {{first_name}}", bodyHtml: "<p>Hi {{first_name}}, from ALPHA_TEMPLATE.</p>", revision: "" };
+  ok(await action("saveEmailTemplate", a.cookie, templateFields, "/settings/templates"), "save workspace template");
+  const savedTemplate = (await query`SELECT * FROM email_templates WHERE workspace_id=${a.workspace}`)[0];
+  assert.equal(savedTemplate.name, "Alpha greeting");
+  denied(await action("saveEmailTemplate", a.cookie, templateFields), "stale template edit");
+  const anonymousTemplate = await action("saveEmailTemplate", "", templateFields);
+  assert.ok(anonymousTemplate.headers.get("location")?.includes("/sign-in") || anonymousTemplate.text.includes('"error":'), "anonymous template write requires sign-in");
+  denied(await action("saveEmailTemplate", b.cookie, { ...templateFields, revision: savedTemplate.revision }), "foreign template revision");
+  const alphaDraft = await action("prepareTemplateDraft", a.cookie, { key: "checking-in", contactId: a.contact });
+  ok(alphaDraft, "personalized template"); assert.ok(alphaDraft.text.includes("ALPHA_TEMPLATE")); assert.ok(alphaDraft.text.includes("Hi ALPHA_ONLY"));
+  const betaDraft = await action("prepareTemplateDraft", b.cookie, { key: "checking-in", contactId: b.contact });
+  ok(betaDraft, "beta starter template"); assert.ok(!betaDraft.text.includes("ALPHA_TEMPLATE"));
+  denied(await action("prepareTemplateDraft", a.cookie, { key: "checking-in", contactId: b.contact }), "foreign template contact");
+  const congrats = await action("prepareTemplateDraft", a.cookie, { key: "congratulations", contactId: a.contact });
+  ok(congrats, "missing milestone prompt"); assert.ok(congrats.text.includes('"missing":["milestone"]'));
+  const personalized = await action("prepareTemplateDraft", a.cookie, { key: "congratulations", contactId: a.contact, fields: JSON.stringify({ milestone: "your new office", first_name: "Do not override" }) });
+  ok(personalized, "manual milestone"); assert.ok(personalized.text.includes("your new office")); assert.ok(!personalized.text.includes("Do not override"));
+  const unsafe = await action("saveEmailTemplate", a.cookie, { ...templateFields, revision: savedTemplate.revision, bodyHtml: '<p>Safe {{first_name}}</p><script>alert(1)</script>' });
+  ok(unsafe, "sanitized template"); assert.ok(!(await query`SELECT body_html FROM email_templates WHERE workspace_id=${a.workspace}`)[0].body_html.includes("script"));
+  denied(await action("saveEmailTemplate", b.cookie, { ...templateFields, bodyHtml: "<p>{{unknown_tag}}</p>" }), "unknown tag");
+  for (const person of [a, b]) {
+    await query`INSERT INTO connections (workspace_id,provider,provider_label,company_name,base_currency) VALUES (${person.workspace},'apxledger','QA books','QA','CAD')`;
+    await query`INSERT INTO synced_invoices (workspace_id,company_id,number,issued_date,due_date,total_cents,outstanding_cents,status) VALUES (${person.workspace},${person.company},${person === a ? "ALPHA-INV" : "BETA-INV"},'2020-01-01','2020-01-31',12345,12345,'overdue')`;
+  }
+  const invoicePrompt = await action("prepareTemplateDraft", a.cookie, { key: "invoice-overdue", contactId: a.contact });
+  ok(invoicePrompt, "invoice selection"); assert.ok(invoicePrompt.text.includes("ALPHA-INV")); assert.ok(!invoicePrompt.text.includes("BETA-INV"));
+  denied(await action("prepareTemplateDraft", a.cookie, { key: "invoice-overdue", contactId: a.contact, invoiceNumber: "BETA-INV" }), "foreign invoice selection");
+  const invoiceDraft = await action("prepareTemplateDraft", a.cookie, { key: "invoice-overdue", contactId: a.contact, invoiceNumber: "ALPHA-INV" });
+  ok(invoiceDraft, "resolved invoice draft"); assert.ok(invoiceDraft.text.includes("123.45")); assert.ok(invoiceDraft.text.includes("January 31, 2020")); assert.ok(invoiceDraft.text.includes('"missing":[]'));
+  denied(await action("prepareTemplateDraft", a.cookie, { key: "invoice-due", contactId: a.contact, invoiceNumber: "ALPHA-INV" }), "overdue invoice in coming-due template");
+  denied(await action("sendEmailFromRecord", a.cookie, { contactId: a.contact, companyId: a.company, to: "qa@example.test", subject: "Hi {{first_name}}", body: "Never send" }), "unresolved send tag");
+  denied(await action("sendEmailFromRecord", a.cookie, { contactId: a.contact, companyId: a.company, to: "qa@example.test", subject: "Invoice", body: "Never send", templateInvoice: JSON.stringify({ number: "ALPHA-INV", dueDate: "2020-01-31", outstandingCents: 999, mode: "overdue", currency: "CAD" }) }), "changed invoice send");
+  passed("templates persist per workspace, protect concurrent edits, resolve tags and reject foreign or stale invoice data");
   const mutations = [
     ["createContact", { firstName: "Attack", companyId: b.company }],
     ["createDeal", { name: "Attack", stageId: b.stage, companyId: a.company }],

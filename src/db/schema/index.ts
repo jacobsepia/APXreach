@@ -39,6 +39,19 @@ export const workspaceMembers = pgTable("workspace_members", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [uniqueIndex("workspace_members_user_workspace_idx").on(table.userId, table.workspaceId)]);
 
+// Starter templates are code defaults; workspace edits override them without
+// changing another workspace or already-composed emails.
+export const emailTemplates = pgTable("email_templates", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
+  key: text("key").notNull(),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  bodyHtml: text("body_html").notNull(),
+  revision: text("revision").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [uniqueIndex("email_templates_workspace_key_idx").on(table.workspaceId, table.key)]);
+
 export const companies = pgTable("companies", {
   id: uuid("id").defaultRandom().primaryKey(),
   workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),

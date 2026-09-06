@@ -10,8 +10,10 @@ import { sendEmailFromRecord } from "@/lib/actions";
 import { money, relativeDay, shortDate } from "@/lib/format";
 import { StagePill } from "@/components/ui";
 import styles from "./contact-record-modal.module.css";
+import { hasUnresolvedTags } from "@/lib/email-templates";
+import type { TemplateDraft } from "./template-email-editor";
 
-const EmailEditor = dynamic(() => import("./email-editor"), { ssr: false, loading: () => <div className={styles.editorLoading}>Loading editor…</div> });
+const TemplateEmailEditor = dynamic(() => import("./template-email-editor"), { ssr: false, loading: () => <div className={styles.editorLoading}>Loading editor…</div> });
 
 type ContactRecord = {
   id: string; firstName: string; lastName: string; email: string | null;
@@ -65,6 +67,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [bodyHtml, setBodyHtml] = useState("");
+  const [invoiceReference, setInvoiceReference] = useState<TemplateDraft["invoiceReference"]>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -75,6 +78,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
   const name = (contact.firstName + " " + contact.lastName).trim();
   const initials = [contact.firstName, contact.lastName].filter(Boolean).map((part) => part[0]).join("").toUpperCase();
   const dirty = Boolean(subject.trim() || body.trim());
+  const unresolved = hasUnresolvedTags(subject + body);
 
   const requestClose = () => {
     if (sendingRef.current) return;
@@ -111,6 +115,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
   const send = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (sendingRef.current || !data?.mailbox || !contact.email) return;
+    if (unresolved) { setSendError("Fill in or remove the remaining {{tags}} before sending."); return; }
     sendingRef.current = true;
     setSending(true);
     setSendError(null);
@@ -121,9 +126,10 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
     form.set("subject", subject);
     form.set("body", body);
     form.set("bodyHtml", bodyHtml);
+    if (invoiceReference) form.set("templateInvoice", JSON.stringify(invoiceReference));
     try {
       await sendEmailFromRecord(form);
-      setSubject(""); setBody(""); setBodyHtml(""); setQuery("");
+      setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); setQuery("");
       setView("emails");
       setNotice("Email sent from " + data.mailbox.emailAddress + ".");
       refresh();
@@ -167,7 +173,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
             {confirmClose && <div className={styles.discardBar} role="alert">
               <span>You have an unsent draft. Discard it and close?</span>
               <button type="button" className={styles.secondaryButton} onClick={() => { setConfirmClose(false); setView("compose"); }}>Keep writing</button>
-              <button type="button" className={styles.textButton} onClick={() => { setSubject(""); setBody(""); setBodyHtml(""); setConfirmClose(false); setOpen(false); }}>Discard draft</button>
+              <button type="button" className={styles.textButton} onClick={() => { setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); setConfirmClose(false); setOpen(false); }}>Discard draft</button>
             </div>}
 
             <div className={styles.workspace}>
@@ -230,9 +236,10 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
                       {!data ? (!loading && !error && <p className={styles.muted}>Load the contact to check your mailbox.</p>) : !data.mailbox ? <div className={styles.empty}><Mail size={30} /><h4>Connect your mailbox</h4><p>A connected mailbox is needed to send from Reach.</p><Link href="/settings" className={styles.primaryButton}>Open Settings</Link></div> : !contact.email ? <div className={styles.empty}><h4>No email address yet</h4><p>Add an email address using the contact's edit control.</p></div> : (
                         <form onSubmit={send} className={styles.composeForm}>
                           <label className={styles.subjectField}><span>Subject</span><input name="subject" aria-label="Subject" placeholder="Give your email a subject" value={subject} onChange={(event) => setSubject(event.target.value)} required disabled={sending} maxLength={998} autoFocus /></label>
-                          <EmailEditor value={bodyHtml} disabled={sending} firstName={contact.firstName} onChange={(html, text) => { setBodyHtml(html); setBody(text); }} />
+                          <TemplateEmailEditor contactId={contact.id} templates={data.templates} value={bodyHtml} disabled={sending} firstName={contact.firstName} dirty={dirty} onChange={(html, text) => { setBodyHtml(html); setBody(text); }} onApply={draft => { setSubject(draft.subject); setBodyHtml(draft.bodyHtml); setBody(draft.text); setInvoiceReference(draft.invoiceReference); setSendError(null); }} />
+                          {unresolved && <div role="alert" className={styles.error}>Fill in or remove the remaining {"{{tags}}"} before sending.</div>}
                           {sendError && <div role="alert" className={styles.error}>{sendError}</div>}
-                          <div className={styles.composeFooter}><span><CheckCircle2 size={14} />Saved to this contact's history after sending</span><button type="submit" disabled={sending || !subject.trim() || !body.trim()} className={styles.primaryButton}>{sending ? <LoaderCircle size={16} className={styles.spin} /> : <Send size={16} />}{sending ? "Sending…" : "Send email"}</button></div>
+                          <div className={styles.composeFooter}><span><CheckCircle2 size={14} />Saved to this contact's history after sending</span><button type="submit" disabled={sending || unresolved || !subject.trim() || !body.trim()} className={styles.primaryButton}>{sending ? <LoaderCircle size={16} className={styles.spin} /> : <Send size={16} />}{sending ? "Sending…" : "Send email"}</button></div>
                         </form>
                       )}
                     </section>
