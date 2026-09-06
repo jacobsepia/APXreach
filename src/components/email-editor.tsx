@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
+import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { TextStyleKit } from "@tiptap/extension-text-style";
 import TextAlign from "@tiptap/extension-text-align";
@@ -12,6 +12,13 @@ import { templateTags } from "@/lib/email-templates";
 type Props = { value: string; disabled: boolean; firstName: string; onChange: (html: string, text: string) => void; toolbarEnd?: React.ReactNode; belowToolbar?: React.ReactNode; allowTags?: boolean };
 const fonts = ["Arial", "Verdana", "Georgia", "Tahoma", "Times New Roman", "Courier New"];
 const sizes = [10, 12, 14, 16, 18, 20, 24, 28, 32];
+const readEditorState = (current: Editor) => ({
+  bold: current.isActive("bold"), italic: current.isActive("italic"), underline: current.isActive("underline"),
+  bullet: current.isActive("bulletList"), numbered: current.isActive("orderedList"),
+  align: current.getAttributes("paragraph").textAlign || "left",
+  font: current.getAttributes("textStyle").fontFamily || "Arial", size: current.getAttributes("textStyle").fontSize || "14px",
+  undo: current.can().undo(), redo: current.can().redo(), empty: current.isEmpty,
+});
 
 export default function EmailEditor({ value, disabled, firstName, onChange, toolbarEnd, belowToolbar, allowTags }: Props) {
   const editor = useEditor({
@@ -26,13 +33,10 @@ export default function EmailEditor({ value, disabled, firstName, onChange, tool
     editorProps: { attributes: { role: "textbox", "aria-label": "Message", "aria-multiline": "true", class: styles.richInput } },
     onUpdate: ({ editor: current }) => onChange(current.isEmpty ? "" : current.getHTML(), current.getText({ blockSeparator: "\n" })),
   });
-  const state = useEditorState({ editor, selector: ({ editor: current }) => current ? ({
-    bold: current.isActive("bold"), italic: current.isActive("italic"), underline: current.isActive("underline"),
-    bullet: current.isActive("bulletList"), numbered: current.isActive("orderedList"),
-    align: current.getAttributes("paragraph").textAlign || "left",
-    font: current.getAttributes("textStyle").fontFamily || "Arial", size: current.getAttributes("textStyle").fontSize || "14px",
-    undo: current.can().undo(), redo: current.can().redo(), empty: current.isEmpty,
-  }) : null });
+  // The subscription can retain its initial null snapshot until the first
+  // transaction. Render from the new editor immediately rather than waiting
+  // for an artificial content update just to mount the editable surface.
+  const state = useEditorState({ editor, selector: ({ editor: current }) => current ? readEditorState(current) : null }) ?? (editor ? readEditorState(editor) : null);
 
   // Loading/sending is not an edit. Emitting an update here can overwrite a
   // freshly-applied template with the editor's previous content.
