@@ -1,0 +1,48 @@
+/* Chart furniture: the data is the only thing allowed to be loud. */
+.figure { display:flex; flex-direction:column; gap:10px; }
+.legend { display:flex; flex-wrap:wrap; gap:14px; font-size:11px; color:var(--text-tertiary); }
+.legend span { display:inline-flex; align-items:center; gap:6px; }
+.legend i { display:inline-block; width:10px; height:10px; border-radius:2px; }
+
+/* Columns: one baseline, hairline grid, thin marks with a 4px rounded cap. */
+.plot { position:relative; display:flex; align-items:flex-end; gap:6px; height:170px; padding-bottom:22px; }
+.grid { position:absolute; left:0; right:0; height:1px; background:rgba(21,24,28,.06); pointer-events:none; }
+.gridLabel { position:absolute; right:0; transform:translateY(-100%); padding-bottom:2px; font-size:10px; color:#9aa1ab; font-variant-numeric:tabular-nums; pointer-events:none; }
+.group { position:relative; display:flex; flex:1; min-width:0; height:100%; align-items:flex-end; justify-content:center; gap:2px; }
+.group::after { content:attr(data-label); position:absolute; left:0; right:0; bottom:-20px; text-align:center; font-size:10px; color:#9aa1ab; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.col { position:relative; display:flex; align-items:flex-end; width:100%; max-width:22px; height:100%; border:0; padding:0; background:none; cursor:default; }
+.col:focus-visible { outline:2px solid rgba(107,33,168,.35); outline-offset:2px; border-radius:4px; }
+.fill { width:100%; min-height:2px; border-radius:4px 4px 0 0; transition:filter .12s; }
+.col:hover .fill, .col:focus-visible .fill { filter:brightness(.9); }
+.colLabel { position:absolute; left:50%; bottom:100%; transform:translateX(-50%); padding-bottom:3px; font-size:10px; font-weight:600; color:#2b2433; white-space:nowrap; font-variant-numeric:tabular-nums; }
+
+/* One tooltip, every series, on hover and on keyboard focus alike. */
+.tip { position:absolute; left:50%; bottom:calc(100% + 6px); z-index:5; min-width:120px; transform:translateX(-50%); padding:7px 9px; border-radius:8px; background:#15181c; color:#fff; font-size:11px; line-height:1.4; text-align:left; opacity:0; pointer-events:none; transition:opacity .1s; white-space:nowrap; }
+.tip strong { display:block; margin-bottom:2px; font-weight:600; color:#c9ccd2; }
+.tip div { display:flex; align-items:center; gap:6px; }
+.tip i { display:inline-block; width:10px; height:2px; border-radius:1px; }
+.tip b { font-weight:700; }
+.col:hover .tip, .col:focus-visible .tip, .bar:hover .tip, .bar:focus-visible .tip { opacity:1; }
+.group:first-child .tip { left:0; transform:none; }
+.group:last-child .tip { left:auto; right:0; transform:none; }
+
+/* Horizontal bars: label, thin bar, value at the tip. */
+.bars { display:flex; flex-direction:column; gap:7px; }
+.bar { position:relative; display:grid; grid-template-columns:minmax(90px,150px) minmax(0,1fr) auto; align-items:center; gap:10px; width:100%; border:0; padding:0; background:none; text-align:left; font:inherit; color:inherit; cursor:default; }
+.bar:focus-visible { outline:2px solid rgba(107,33,168,.35); outline-offset:3px; border-radius:4px; }
+.barLabel { font-size:12px; color:#2b2433; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.barSub { display:block; font-size:10px; color:#9aa1ab; }
+.track { height:16px; }
+.barFill { height:100%; min-width:2px; border-radius:0 4px 4px 0; transition:filter .12s; }
+.bar:hover .barFill, .bar:focus-visible .barFill { filter:brightness(.9); }
+.barValue { font-size:12px; font-weight:600; color:#2b2433; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.bar .tip { left:auto; right:0; bottom:calc(100% + 4px); transform:none; }
+
+/* Every chart's table twin. */
+.table summary { cursor:pointer; font-size:11px; color:var(--text-tertiary); }
+.table table { width:100%; margin-top:6px; border-collapse:collapse; font-size:12px; }
+.table th { padding:4px 8px 4px 0; text-align:left; font-weight:500; color:var(--text-tertiary); border-bottom:1px solid rgba(21,24,28,.08); }
+.table td { padding:4px 8px 4px 0; border-bottom:1px solid rgba(21,24,28,.05); font-variant-numeric:tabular-nums; }
+.table td + td, .table th + th { text-align:right; }
+
+.empty { padding:22px 0; font-size:12px; color:var(--text-tertiary); }
