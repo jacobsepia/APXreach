@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 import { and, desc, eq } from "drizzle-orm";
 import { companies, contacts, db, emailMessages, mailboxes } from "@/db";
-import { auth } from "@/lib/auth";
+import { requireTenant } from "@/lib/workspace";
 import { pollMailboxesNow } from "@/lib/actions";
 import { isFresh, pollMailbox } from "@/lib/mailbox/poll";
 import { Avatar, Card, EmptyState, Pill } from "@/components/ui";
@@ -37,32 +36,41 @@ function snippet(text: string, max = 140): string {
 }
 
 export default async function InboxPage() {
-  const session = await auth.api.getSession({ headers: await headers() });
+  /* Membership is resolved on the server; everything below is one workspace. */
+  const { workspaceId, userId } = await requireTenant();
 
-  const mine = session
-    ? await db
-        .select()
-        .from(mailboxes)
-        .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.status, "connected")))
-    : [];
+  const mine = await db
+    .select()
+    .from(mailboxes)
+    .where(
+      and(
+        eq(mailboxes.userId, userId),
+        eq(mailboxes.workspaceId, workspaceId),
+        eq(mailboxes.status, "connected"),
+      ),
+    );
 
   /* Poll only what has gone stale; a page refresh is not a reason to call
      Zoho twice in a minute. Errors land on the mailbox row, shown below. */
   for (const mailbox of mine) {
     if (!isFresh(mailbox)) await pollMailbox(mailbox);
   }
-  const refreshed = session
-    ? await db
-        .select({
-          id: mailboxes.id,
-          emailAddress: mailboxes.emailAddress,
-          providerLabel: mailboxes.providerLabel,
-          lastPolledAt: mailboxes.lastPolledAt,
-          lastError: mailboxes.lastError,
-        })
-        .from(mailboxes)
-        .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.status, "connected")))
-    : [];
+  const refreshed = await db
+    .select({
+      id: mailboxes.id,
+      emailAddress: mailboxes.emailAddress,
+      providerLabel: mailboxes.providerLabel,
+      lastPolledAt: mailboxes.lastPolledAt,
+      lastError: mailboxes.lastError,
+    })
+    .from(mailboxes)
+    .where(
+      and(
+        eq(mailboxes.userId, userId),
+        eq(mailboxes.workspaceId, workspaceId),
+        eq(mailboxes.status, "connected"),
+      ),
+    );
 
   const messages = await db
     .select({
@@ -83,6 +91,7 @@ export default async function InboxPage() {
     .from(emailMessages)
     .leftJoin(contacts, eq(emailMessages.contactId, contacts.id))
     .leftJoin(companies, eq(emailMessages.companyId, companies.id))
+    .where(eq(emailMessages.workspaceId, workspaceId))
     .orderBy(desc(emailMessages.sentAt))
     .limit(100);
 
