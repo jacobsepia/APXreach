@@ -58,7 +58,7 @@ export async function prepareTemplateDraft(form: FormData) {
   // Settings can preview unsaved edits; compose uses the saved workspace template.
   const subject = form.has("previewSubject") ? z.string().max(998).parse(form.get("previewSubject")) : template.subject;
   const bodyHtml = form.has("previewHtml") ? validateTemplate(subject, z.string().max(200000).parse(form.get("previewHtml"))) : template.bodyHtml;
-  const context = await contactTemplateContext(tenant.workspaceId, z.uuid().parse(form.get("contactId")), tenant.userName, tenant.workspaceName);
+  const context = await contactTemplateContext(tenant.workspaceId, z.uuid().parse(form.get("contactId")), tenant.userName, tenant.workspaceName, tenant.userId);
   const fields = z.record(z.string().max(80), z.string().max(1000)).parse(JSON.parse(z.string().max(16000).parse(form.get("fields") ?? "{}")));
   const values: Record<string, string> = { ...context.values };
   for (const [tag, value] of Object.entries(fields)) {

@@ -11,6 +11,7 @@ import { money, relativeDay, shortDate } from "@/lib/format";
 import { StagePill } from "@/components/ui";
 import styles from "./contact-record-modal.module.css";
 import { hasUnresolvedTags } from "@/lib/email-templates";
+import { isSignatureOnly } from "@/lib/email-signature";
 import type { TemplateDraft } from "./template-email-editor";
 
 const TemplateEmailEditor = dynamic(() => import("./template-email-editor"), { ssr: false, loading: () => <div className={styles.editorLoading}>Loading editor…</div> });
@@ -75,14 +76,18 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const sendingRef = useRef(false);
+  const signatureInitialized = useRef(false);
+  const signatureText = useRef("");
   const name = (contact.firstName + " " + contact.lastName).trim();
   const initials = [contact.firstName, contact.lastName].filter(Boolean).map((part) => part[0]).join("").toUpperCase();
-  const dirty = Boolean(subject.trim() || body.trim());
+  const hasMessage = !isSignatureOnly(body, signatureText.current);
+  const dirty = Boolean(subject.trim() || hasMessage);
   const unresolved = hasUnresolvedTags(subject + body);
 
   const requestClose = () => {
     if (sendingRef.current) return;
     if (dirty) { setConfirmClose(true); return; }
+    setBody(""); setBodyHtml(""); signatureInitialized.current = false; signatureText.current = "";
     setOpen(false);
   };
   const compose = () => { setView("compose"); setSendError(null); setNotice(null); };
@@ -112,9 +117,19 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
     return () => { active = false; window.clearTimeout(timeout); };
   }, [open, contact.id, attempt]);
 
+  useEffect(() => {
+    if (!open || view !== "compose" || !data?.mailbox || signatureInitialized.current) return;
+    signatureInitialized.current = true;
+    if (subject.trim() || body.trim()) return; // Never alter an existing draft.
+    signatureText.current = "Best,\n" + data.signature.text;
+    setBody(signatureText.current);
+    setBodyHtml(`<p></p><p>Best,<br>${data.signature.html}</p>`);
+  }, [open, view, data, subject, body]);
+
   const send = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (sendingRef.current || !data?.mailbox || !contact.email) return;
+    if (!hasMessage) { setSendError("Write a message above your signature before sending."); return; }
     if (unresolved) { setSendError("Fill in or remove the remaining {{tags}} before sending."); return; }
     sendingRef.current = true;
     setSending(true);
@@ -129,7 +144,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
     if (invoiceReference) form.set("templateInvoice", JSON.stringify(invoiceReference));
     try {
       await sendEmailFromRecord(form);
-      setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); setQuery("");
+      setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); setQuery(""); signatureInitialized.current = false; signatureText.current = "";
       setView("emails");
       setNotice("Email sent from " + data.mailbox.emailAddress + ".");
       refresh();
@@ -173,7 +188,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
             {confirmClose && <div className={styles.discardBar} role="alert">
               <span>You have an unsent draft. Discard it and close?</span>
               <button type="button" className={styles.secondaryButton} onClick={() => { setConfirmClose(false); setView("compose"); }}>Keep writing</button>
-              <button type="button" className={styles.textButton} onClick={() => { setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); setConfirmClose(false); setOpen(false); }}>Discard draft</button>
+              <button type="button" className={styles.textButton} onClick={() => { setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); signatureInitialized.current = false; signatureText.current = ""; setConfirmClose(false); setOpen(false); }}>Discard draft</button>
             </div>}
 
             <div className={styles.workspace}>
@@ -239,7 +254,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
                           <TemplateEmailEditor contactId={contact.id} templates={data.templates} value={bodyHtml} disabled={sending} firstName={contact.firstName} dirty={dirty} onChange={(html, text) => { setBodyHtml(html); setBody(text); }} onApply={draft => { setSubject(draft.subject); setBodyHtml(draft.bodyHtml); setBody(draft.text); setInvoiceReference(draft.invoiceReference); setSendError(null); }} />
                           {unresolved && <div role="alert" className={styles.error}>Fill in or remove the remaining {"{{tags}}"} before sending.</div>}
                           {sendError && <div role="alert" className={styles.error}>{sendError}</div>}
-                          <div className={styles.composeFooter}><span><CheckCircle2 size={14} />Saved to this contact's history after sending</span><button type="submit" disabled={sending || unresolved || !subject.trim() || !body.trim()} className={styles.primaryButton}>{sending ? <LoaderCircle size={16} className={styles.spin} /> : <Send size={16} />}{sending ? "Sending…" : "Send email"}</button></div>
+                          <div className={styles.composeFooter}><span><CheckCircle2 size={14} />Saved to this contact's history after sending</span><button type="submit" disabled={sending || unresolved || !subject.trim() || !hasMessage} className={styles.primaryButton}>{sending ? <LoaderCircle size={16} className={styles.spin} /> : <Send size={16} />}{sending ? "Sending…" : "Send email"}</button></div>
                         </form>
                       )}
                     </section>
