@@ -20,13 +20,30 @@ import type { TemplateDraft } from "./template-email-editor";
 
 const TemplateEmailEditor = dynamic(() => import("./template-email-editor"), { ssr: false, loading: () => <div className={styles.editorLoading}>Loading editor…</div> });
 
-type ContactRecord = {
+/* Who the record is about. Only the name and address are required: a reply
+   from the Inbox or an email from a company page opens the same composer
+   without carrying the whole contacts row along. */
+export type ContactRecord = {
   id: string; firstName: string; lastName: string; email: string | null;
-  phone: string | null; title: string | null; lifecycleStage: string;
-  ownerName: string | null; lastActivityAt: Date | null; createdAt: Date;
-  companyId: string | null; companyName: string | null;
-  arBalanceCents: number | null; overdueCents: number | null;
+  phone?: string | null; title?: string | null; lifecycleStage?: string;
+  ownerName?: string | null; lastActivityAt?: Date | null; createdAt?: Date;
+  companyId?: string | null; companyName?: string | null;
+  arBalanceCents?: number | null; overdueCents?: number | null;
 };
+
+/** What a reply starts from: the subject, and the message it answers, quoted under the signature. */
+export type ReplyPrefill = { subject: string; quote?: { from: string; sentAt: string; text: string } };
+
+function quoteBlock(quote: NonNullable<ReplyPrefill["quote"]>) {
+  const escape = (value: string) => value.replace(/[&<>]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[char]!);
+  const when = new Intl.DateTimeFormat("en-CA", { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(quote.sentAt));
+  const heading = `On ${when}, ${quote.from} wrote:`;
+  const lines = quote.text.replace(/\r/g, "").split("\n").map((line) => line.trim()).filter(Boolean).slice(0, 80);
+  return {
+    text: [heading, ...lines].join("\n"),
+    html: `<blockquote><p>${escape(heading)}</p>${lines.map((line) => `<p>${escape(line)}</p>`).join("")}</blockquote>`,
+  };
+}
 type RecordData = Awaited<ReturnType<typeof loadContactRecord>>;
 type Message = RecordData["messages"][number];
 type View = "activity" | "emails" | "overview" | "compose";
@@ -62,9 +79,17 @@ function MessageCard({ message }: { message: Message }) {
   );
 }
 
-export function ContactRecordModal({ contact, children }: { contact: ContactRecord; children: React.ReactNode }) {
+export function ContactRecordModal({ contact, children, initialView = "activity", reply, triggerClassName, triggerLabel }: {
+  contact: ContactRecord;
+  children: React.ReactNode;
+  /** "compose" opens straight into the composer — the Email buttons and Inbox replies. */
+  initialView?: View;
+  reply?: ReplyPrefill;
+  triggerClassName?: string;
+  triggerLabel?: string;
+}) {
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState<View>("activity");
+  const [view, setView] = useState<View>(initialView);
   const [data, setData] = useState<RecordData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -212,9 +237,14 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
     if (!open || view !== "compose" || !data?.mailbox || signatureInitialized.current) return;
     signatureInitialized.current = true;
     if (subject.trim() || body.trim()) return; // Never alter an existing draft.
-    signatureText.current = "Best,\n" + data.signature.text;
+    /* A reply starts with its subject and the message it answers quoted under
+       the signature. The quote counts as "nothing written yet": Send stays off
+       until the person adds their own words above it. */
+    const quote = reply?.quote ? quoteBlock(reply.quote) : null;
+    if (reply?.subject) setSubject(reply.subject);
+    signatureText.current = "Best,\n" + data.signature.text + (quote ? "\n" + quote.text : "");
     setBody(signatureText.current);
-    setBodyHtml(`<p></p><p>Best,<br>${data.signature.html}</p>`);
+    setBodyHtml(`<p></p><p>Best,<br>${data.signature.html}</p>${quote?.html ?? ""}`);
   }, [open, view, data, subject, body]);
 
   const send = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -260,7 +290,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
 
   return (
     <>
-      <button ref={triggerRef} type="button" onClick={() => { setView("activity"); setData(null); setQuery(""); setNotice(null); setOpen(true); }} className={styles.trigger} aria-haspopup="dialog" aria-label={"Open " + name + "'s contact record"}>{children}</button>
+      <button ref={triggerRef} type="button" onClick={() => { setView(initialView); setData(null); setQuery(""); setNotice(null); setOpen(true); }} className={triggerClassName ?? styles.trigger} aria-haspopup="dialog" aria-label={triggerLabel ?? "Open " + name + "'s contact record"}>{children}</button>
       {open && createPortal(
         <dialog ref={dialogRef} aria-label={name + "'s contact record"} onCancel={(event) => { event.preventDefault(); requestClose(); }} className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) requestClose(); }}>
           <section className={styles.shell}>
@@ -269,7 +299,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
                 <div className={styles.avatar}>{initials}<span /></div>
                 <div className={styles.identityText}>
                   <div className={styles.eyebrow}>CONTACT RECORD <span> / </span> APX REACH</div>
-                  <div className={styles.nameLine}><h2>{name}</h2><StagePill stage={contact.lifecycleStage} /></div>
+                  <div className={styles.nameLine}><h2>{name}</h2>{contact.lifecycleStage && <StagePill stage={contact.lifecycleStage} />}</div>
                   <p>{[contact.title, contact.companyName].filter(Boolean).join(" at ") || "Your relationship, in one place."}</p>
                 </div>
               </div>
@@ -296,13 +326,13 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
                   </Link> : <p className={styles.muted}>No company associated.</p>}
                 </section>
 
-                {contact.lifecycleStage === "customer" && contact.arBalanceCents !== null && <section className={styles.booksCard}>
+                {contact.lifecycleStage === "customer" && contact.arBalanceCents != null && <section className={styles.booksCard}>
                   <div className={styles.booksLabel}><span /> CONNECTED BOOKS</div>
                   <span className={styles.muted}>Company outstanding</span>
                   <strong className={styles.balance}>{money(contact.arBalanceCents)}</strong>
                   <div className={styles.overdue}><span>Overdue</span><strong className={Number(contact.overdueCents) > 0 ? styles.warning : ""}>{money(contact.overdueCents ?? 0)}</strong></div>
                 </section>}
-                <div className={styles.recordDates}><CalendarDays size={14} /> Added {new Intl.DateTimeFormat("en-CA", { month: "short", day: "numeric", year: "numeric" }).format(new Date(contact.createdAt))}</div>
+                {contact.createdAt && <div className={styles.recordDates}><CalendarDays size={14} /> Added {new Intl.DateTimeFormat("en-CA", { month: "short", day: "numeric", year: "numeric" }).format(new Date(contact.createdAt))}</div>}
               </aside>
 
               <div className={styles.main}>
@@ -377,7 +407,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
                     <>
                       <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>THE BIG PICTURE</span><h3>Relationship overview</h3><p>Key details and opportunities, all together.</p></div></div>
                       <div className={styles.metrics}>
-                        <div><Clock3 size={18} /><span>Last interaction</span><strong>{relativeDay(contact.lastActivityAt)}</strong></div>
+                        <div><Clock3 size={18} /><span>Last interaction</span><strong>{relativeDay(contact.lastActivityAt ?? null)}</strong></div>
                         <div><Mail size={18} /><span>Recorded emails</span><strong>{data ? (messages.length === 100 ? "100+" : messages.length) : "—"}</strong></div>
                         <div><Building2 size={18} /><span>Open opportunities</span><strong>{data ? openDeals.length : "—"}</strong></div>
                       </div>

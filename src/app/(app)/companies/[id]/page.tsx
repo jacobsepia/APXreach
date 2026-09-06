@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { and, desc, eq, ne } from "drizzle-orm";
 import {
@@ -10,7 +9,6 @@ import {
   db,
   deals,
   syncedInvoices,
-  mailboxes,
   pipelineStages,
 } from "@/db";
 import { daysBetween, money, monthYear, shortDate } from "@/lib/format";
@@ -19,7 +17,6 @@ import { TimelineComposer } from "@/components/timeline-composer";
 import { requireTenant } from "@/lib/workspace";
 import { RecordActions } from "@/components/record-actions";
 import { ComposeEmail } from "@/components/compose-email";
-import { auth } from "@/lib/auth";
 import {
   AlertTriangle,
   Banknote,
@@ -89,8 +86,7 @@ export default async function CompanyPage({
     .where(and(eq(companies.id, id), eq(companies.workspaceId, workspaceId)));
   if (!company) notFound();
 
-  const session = await auth.api.getSession({ headers: await headers() });
-  const [people, openDeals, timeline, invoices, [connection], [mailbox]] = await Promise.all([
+  const [people, openDeals, timeline, invoices, [connection]] = await Promise.all([
     db.select().from(contacts).where(and(eq(contacts.companyId, id), eq(contacts.workspaceId, workspaceId))),
     db
       .select({
@@ -119,13 +115,6 @@ export default async function CompanyPage({
       .from(connections)
       .where(eq(connections.workspaceId, workspaceId))
       .limit(1),
-    session
-      ? db
-          .select({ emailAddress: mailboxes.emailAddress })
-          .from(mailboxes)
-          .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.workspaceId, workspaceId), eq(mailboxes.status, "connected")))
-          .limit(1)
-      : Promise.resolve([] as { emailAddress: string }[]),
   ]);
 
   const synced = company.lifecycleStage === "customer";
@@ -177,15 +166,7 @@ export default async function CompanyPage({
         </div>
         <div className="flex items-center gap-2">
           <ComposeEmail
-            companyId={company.id}
-            from={mailbox?.emailAddress ?? null}
-            recipients={people
-              .filter((p) => p.email)
-              .map((p) => ({
-                id: p.id,
-                name: `${p.firstName} ${p.lastName}`.replace(/ —$/, "").trim(),
-                email: p.email!,
-              }))}
+            recipients={people.map((p) => ({ ...p, companyName: company.name }))}
           />
           <button className="flex h-8 items-center gap-1.5 rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-foreground">
             <Phone className="size-3.5" />

@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { requireTenant } from "@/lib/workspace";
-import { headers } from "next/headers";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { companies, contacts, db, mailboxes } from "@/db";
-import { auth } from "@/lib/auth";
+import { companies, contacts, db } from "@/db";
 import { money, relativeDay } from "@/lib/format";
 import { Avatar, Card, LedgerDot, Pill, StagePill } from "@/components/ui";
 import { QuickCreate } from "@/components/quick-create";
@@ -18,8 +16,7 @@ export const metadata = { title: "Contacts" };
 
 export default async function ContactsPage() {
   const { workspaceId } = await requireTenant();
-  const session = await auth.api.getSession({ headers: await headers() });
-  const [rows, stageCounts, overdueAccounts, companyOptions, [mailbox]] = await Promise.all([
+  const [rows, stageCounts, overdueAccounts, companyOptions] = await Promise.all([
     db
       .select({
         id: contacts.id,
@@ -55,13 +52,6 @@ export default async function ContactsPage() {
       .from(companies)
       .where(eq(companies.workspaceId, workspaceId))
       .orderBy(companies.name),
-    session
-      ? db
-          .select({ emailAddress: mailboxes.emailAddress })
-          .from(mailboxes)
-          .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.workspaceId, workspaceId), eq(mailboxes.status, "connected")))
-          .limit(1)
-      : Promise.resolve([] as { emailAddress: string }[]),
   ]);
 
   const countOf = (stage: string) =>
@@ -166,13 +156,7 @@ export default async function ContactsPage() {
             </span>
             <span className="flex items-center gap-1">
             {row.email && (
-              <ComposeEmail
-                variant="icon"
-                companyId={row.companyId ?? undefined}
-                from={mailbox?.emailAddress ?? null}
-                recipients={[{ id: row.id, name: `${row.firstName} ${row.lastName}`.trim(), email: row.email }]}
-                defaultRecipientId={row.id}
-              />
+              <ComposeEmail variant="icon" recipients={[row]} defaultRecipientId={row.id} />
             )}
             <RecordActions
               kind="contact"

@@ -28,6 +28,8 @@ export type InboxItem = {
   sentAt: string;
   contactId: string | null;
   contactName: string;
+  contactFirst: string;
+  contactLast: string;
   contactEmail: string | null;
   companyId: string | null;
   companyName: string | null;
@@ -49,7 +51,7 @@ function snippet(text: string, max = 90): string {
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
-export function InboxView({ items, from }: { items: InboxItem[]; from: string | null }) {
+export function InboxView({ items }: { items: InboxItem[] }) {
   const [selectedId, setSelectedId] = useState<string | null>(items[0]?.id ?? null);
   /* Phone layout only: which of the two panes is showing. */
   const [paneOpen, setPaneOpen] = useState(false);
@@ -152,11 +154,22 @@ export function InboxView({ items, from }: { items: InboxItem[]; from: string | 
                 </Pill>
                 {selected.contactId && selected.contactEmail && (
                   <ComposeEmail
-                    companyId={selected.companyId ?? undefined}
-                    from={from}
-                    recipients={[{ id: selected.contactId, name: selected.contactName, email: selected.contactEmail }]}
+                    key={selected.id}
+                    recipients={[{
+                      id: selected.contactId,
+                      firstName: selected.contactFirst,
+                      lastName: selected.contactLast,
+                      email: selected.contactEmail,
+                      companyId: selected.companyId,
+                      companyName: selected.companyName,
+                    }]}
                     defaultRecipientId={selected.contactId}
-                    defaultSubject={/^re:/i.test(selected.subject) ? selected.subject : `Re: ${selected.subject}`}
+                    reply={{
+                      subject: /^re:/i.test(selected.subject) ? selected.subject : `Re: ${selected.subject}`,
+                      quote: selected.direction === "inbound"
+                        ? { from: selected.contactName, sentAt: selected.sentAt, text: selected.bodyText }
+                        : undefined,
+                    }}
                     buttonLabel={selected.direction === "inbound" ? "Reply" : "Follow up"}
                   />
                 )}

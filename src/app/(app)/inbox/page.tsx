@@ -92,7 +92,6 @@ export default async function InboxPage() {
     .orderBy(desc(emailMessages.sentAt))
     .limit(100);
 
-  const from = refreshed[0]?.emailAddress ?? null;
   const inboundCount = messages.filter((m) => m.direction === "inbound").length;
 
   if (mine.length === 0) {
@@ -126,6 +125,8 @@ export default async function InboxPage() {
       sentAt: m.sentAt.toISOString(),
       contactId: m.contactId,
       contactName,
+      contactFirst: m.contactFirst ?? contactName,
+      contactLast: m.contactLast === "—" ? "" : (m.contactLast ?? ""),
       contactEmail: m.contactEmail,
       companyId: m.companyId,
       companyName: m.companyName,
@@ -175,7 +176,7 @@ export default async function InboxPage() {
         </div>
       </div>
 
-      <InboxView items={items} from={from} />
+      <InboxView items={items} />
     </div>
   );
 }
