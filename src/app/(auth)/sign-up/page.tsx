@@ -17,7 +17,7 @@ export default function SignUpPage() {
             Start <span className="gradient-text-flow">reaching</span>.
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            APX team accounts only, for now.
+            Your own workspace. Sign up with APX Ledger or email.
           </p>
         </div>
         <div className="accent-rail relative overflow-hidden rounded-2xl border border-border bg-white p-6 shadow-[var(--edge-top)]">

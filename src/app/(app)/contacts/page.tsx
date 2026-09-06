@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireTenant } from "@/lib/workspace";
 import { headers } from "next/headers";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { companies, contacts, db, mailboxes } from "@/db";
@@ -8,6 +9,7 @@ import { Avatar, Card, LedgerDot, Pill, StagePill } from "@/components/ui";
 import { QuickCreate } from "@/components/quick-create";
 import { RecordActions } from "@/components/record-actions";
 import { ComposeEmail } from "@/components/compose-email";
+import { ContactRecordModal } from "@/components/contact-record-modal";
 import { Download } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +17,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Contacts" };
 
 export default async function ContactsPage() {
+  const { workspaceId } = await requireTenant();
   const session = await auth.api.getSession({ headers: await headers() });
   const [rows, stageCounts, overdueAccounts, companyOptions, [mailbox]] = await Promise.all([
     db
@@ -28,31 +31,35 @@ export default async function ContactsPage() {
         lifecycleStage: contacts.lifecycleStage,
         ownerName: contacts.ownerName,
         lastActivityAt: contacts.lastActivityAt,
+        createdAt: contacts.createdAt,
         companyId: contacts.companyId,
         companyName: companies.name,
         arBalanceCents: companies.arBalanceCents,
         overdueCents: companies.overdueCents,
       })
       .from(contacts)
-      .leftJoin(companies, eq(contacts.companyId, companies.id))
+      .leftJoin(companies, and(eq(contacts.companyId, companies.id), eq(companies.workspaceId, workspaceId)))
+      .where(eq(contacts.workspaceId, workspaceId))
       .orderBy(desc(contacts.lastActivityAt)),
     db
       .select({ stage: contacts.lifecycleStage, count: sql<number>`count(*)` })
       .from(contacts)
+      .where(eq(contacts.workspaceId, workspaceId))
       .groupBy(contacts.lifecycleStage),
     db
       .select({ count: sql<number>`count(*)` })
       .from(companies)
-      .where(sql`${companies.overdueCents} > 0`),
+      .where(and(sql`${companies.overdueCents} > 0`, eq(companies.workspaceId, workspaceId))),
     db
       .select({ id: companies.id, name: companies.name })
       .from(companies)
+      .where(eq(companies.workspaceId, workspaceId))
       .orderBy(companies.name),
     session
       ? db
           .select({ emailAddress: mailboxes.emailAddress })
           .from(mailboxes)
-          .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.status, "connected")))
+          .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.workspaceId, workspaceId), eq(mailboxes.status, "connected")))
           .limit(1)
       : Promise.resolve([] as { emailAddress: string }[]),
   ]);
@@ -120,12 +127,12 @@ export default async function ContactsPage() {
             key={row.id}
             className={`transition-colors hover:bg-[var(--tint)] grid h-[46px] grid-cols-[220px_180px_minmax(0,1fr)_110px_60px_100px_100px_96px] items-center gap-3 px-4 text-[13px] ${i < rows.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
           >
-            <span className="flex min-w-0 items-center gap-2.5">
+            <ContactRecordModal contact={row}>
               <Avatar name={`${row.firstName} ${row.lastName}`} />
               <span className="truncate font-medium text-foreground">
                 {row.firstName} {row.lastName}
               </span>
-            </span>
+            </ContactRecordModal>
             <span className="truncate text-muted-foreground">
               {row.companyId ? (
                 <Link href={`/companies/${row.companyId}`} className="hover:text-foreground">

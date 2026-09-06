@@ -1,8 +1,9 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
-import { db, mailboxes, workspaces } from "@/db";
+import { db, mailboxes } from "@/db";
 import { auth } from "@/lib/auth";
+import { requireTenant } from "@/lib/workspace";
 import { getMailboxProvider } from "@/lib/mailbox/providers";
 import { clientCredentials, exchangeCode, statesMatch } from "@/lib/oauth";
 
@@ -30,8 +31,8 @@ export async function GET(
       ? `${origin}/settings?error=${encodeURIComponent(message)}`
       : `${origin}/settings?mailbox=1`;
     const response = NextResponse.redirect(target, { status: 303 });
-    response.cookies.delete(`apxreach_mbox_pkce_${providerId}`);
-    response.cookies.delete(`apxreach_mbox_state_${providerId}`);
+    response.cookies.set(`apxreach_mbox_pkce_${providerId}`, "", { path: "/api/mailboxes", maxAge: 0 });
+    response.cookies.set(`apxreach_mbox_state_${providerId}`, "", { path: "/api/mailboxes", maxAge: 0 });
     return response;
   };
 
@@ -40,6 +41,7 @@ export async function GET(
     return NextResponse.redirect(`${origin}/sign-in?to=/settings`, { status: 303 });
   }
 
+  const tenant = await requireTenant();
   const provider = getMailboxProvider(providerId);
   if (!provider) return finish("That mailbox can't be connected yet.");
 
@@ -65,7 +67,7 @@ export async function GET(
   );
   const expectedState = jar[`apxreach_mbox_state_${providerId}`];
   const verifier = jar[`apxreach_mbox_pkce_${providerId}`];
-  if (!expectedState || !verifier || !statesMatch(expectedState, returnedState)) {
+  if (!expectedState || !verifier || !statesMatch(expectedState, returnedState) || !expectedState.startsWith(`${tenant.userId}:${tenant.workspaceId}:`)) {
     return finish("That connection attempt expired or didn't match. Try again.");
   }
 
@@ -96,8 +98,7 @@ export async function GET(
     );
   }
 
-  const [workspace] = await db.select({ id: workspaces.id }).from(workspaces).limit(1);
-  if (!workspace) return finish("No workspace yet.");
+  const workspace = { id: tenant.workspaceId };
 
   const values = {
     workspaceId: workspace.id,
@@ -119,7 +120,7 @@ export async function GET(
   const [existing] = await db
     .select({ id: mailboxes.id })
     .from(mailboxes)
-    .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.provider, provider.id)));
+    .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.workspaceId, tenant.workspaceId), eq(mailboxes.provider, provider.id)));
   if (existing) {
     await db.update(mailboxes).set(values).where(eq(mailboxes.id, existing.id));
   } else {

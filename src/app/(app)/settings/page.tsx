@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireTenant } from "@/lib/workspace";
 import { headers } from "next/headers";
 import { and, eq } from "drizzle-orm";
 import { db, connections, mailboxes } from "@/db";
@@ -26,15 +27,16 @@ export default async function SettingsPage({
   searchParams: Promise<{ error?: string; connected?: string; mailbox?: string }>;
 }) {
   const { error, connected: justConnected, mailbox: justLinkedMailbox } = await searchParams;
+  const { workspaceId } = await requireTenant();
   const session = await auth.api.getSession({ headers: await headers() });
-  const [connection] = await db.select().from(connections).limit(1);
+  const [connection] = await db.select().from(connections).where(eq(connections.workspaceId, workspaceId)).limit(1);
   /* A mailbox belongs to the person, so only theirs is shown or offered. */
   const myMailboxes = session
     ? await db
         .select()
         .from(mailboxes)
         .where(
-          and(eq(mailboxes.userId, session.user.id), eq(mailboxes.status, "connected")),
+          and(eq(mailboxes.userId, session.user.id), eq(mailboxes.workspaceId, workspaceId), eq(mailboxes.status, "connected")),
         )
     : [];
   const mailboxOptions = configuredMailboxProviders();
@@ -54,6 +56,8 @@ export default async function SettingsPage({
           the connection on their side — nothing is copied by hand.
         </p>
       </div>
+
+      <Card className="px-[18px] py-4"><div className="flex items-center justify-between gap-4"><div><Caps>Email templates</Caps><p className="mt-2 text-sm text-muted-foreground">Personal greetings, follow-ups, and invoice reminders. Edit your ten workspace templates and their personalization tags.</p></div><Link href="/settings/templates" className="shrink-0 rounded-lg border border-input bg-white px-3 py-2 text-xs font-medium">Manage templates →</Link></div></Card>
 
       {error && (
         <Card className="border-[color-mix(in_srgb,var(--accent-hot)_35%,transparent)] px-[18px] py-3">

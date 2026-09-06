@@ -19,6 +19,7 @@ export function SignUpForm({ ledgerReady }: { ledgerReady: boolean }) {
     setBusy(true);
     setError(null);
     const data = new FormData(e.currentTarget);
+    try {
     const result = await signUp.email({
       name: String(data.get("name") ?? ""),
       email: String(data.get("email") ?? ""),
@@ -29,8 +30,13 @@ export function SignUpForm({ ledgerReady }: { ledgerReady: boolean }) {
       setError(result.error.message ?? "That didn't work.");
       return;
     }
-    router.push("/dashboard");
+    router.push("/welcome");
     router.refresh();
+    } catch {
+      setError("Could not reach Reach. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -53,7 +59,7 @@ export function SignUpForm({ ledgerReady }: { ledgerReady: boolean }) {
             name="email"
             type="email"
             required
-            placeholder="you@apxsolutions.ca"
+            placeholder="you@company.com"
             autoComplete="email"
             className={field}
           />

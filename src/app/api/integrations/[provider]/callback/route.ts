@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireTenant } from "@/lib/workspace";
 import { getProvider } from "@/lib/providers";
 import { callbackUrl, clientCredentials, exchangeCode, statesMatch } from "@/lib/oauth";
 import { saveConnection } from "@/lib/sync";
@@ -29,8 +30,8 @@ export async function GET(
       ? `${origin}/settings?error=${encodeURIComponent(message)}`
       : `${origin}/settings?connected=1`;
     const response = NextResponse.redirect(target, { status: 303 });
-    response.cookies.delete(`apxreach_pkce_${providerId}`);
-    response.cookies.delete(`apxreach_state_${providerId}`);
+    response.cookies.set(`apxreach_pkce_${providerId}`, "", { path: "/api/integrations", maxAge: 0 });
+    response.cookies.set(`apxreach_state_${providerId}`, "", { path: "/api/integrations", maxAge: 0 });
     return response;
   };
 
@@ -39,6 +40,7 @@ export async function GET(
     return NextResponse.redirect(`${origin}/sign-in?to=/settings`, { status: 303 });
   }
 
+  const tenant = await requireTenant();
   const provider = getProvider(providerId);
   if (!provider?.oauth) return finish("That provider can't be connected yet.");
 
@@ -65,7 +67,7 @@ export async function GET(
   );
   const expectedState = jar[`apxreach_state_${providerId}`];
   const verifier = jar[`apxreach_pkce_${providerId}`];
-  if (!expectedState || !verifier || !statesMatch(expectedState, returnedState)) {
+  if (!expectedState || !verifier || !statesMatch(expectedState, returnedState) || !expectedState.startsWith(`${tenant.userId}:${tenant.workspaceId}:`)) {
     return finish("That connection attempt expired or didn't match. Try again.");
   }
 
@@ -81,7 +83,7 @@ export async function GET(
   });
   if (!tokens.ok) return finish(tokens.error);
 
-  const saved = await saveConnection(provider, tokens.value, origin);
+  const saved = await saveConnection(tenant.workspaceId, provider, tokens.value, origin);
   if (!saved.ok) return finish(saved.error);
   return finish();
 }

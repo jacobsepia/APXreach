@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { activities, companies, connections, contacts, db, syncedInvoices, workspaces } from "@/db";
+import { activities, companies, connections, contacts, db, syncedInvoices } from "@/db";
 import { getProvider, type AccountingProvider, type OAuthTokens } from "@/lib/providers";
 import { clientCredentials, refreshTokens } from "@/lib/oauth";
 
@@ -54,13 +54,13 @@ async function subscribeToPushes(
 }
 
 export async function saveConnection(
+  workspaceId: string,
   provider: AccountingProvider,
   tokens: OAuthTokens,
   /** This deployment's own origin, which is what the provider will call back. */
   origin?: string,
 ): Promise<Outcome> {
-  const [workspace] = await db.select({ id: workspaces.id }).from(workspaces).limit(1);
-  if (!workspace) return { ok: false, error: "No workspace yet." };
+  const workspace = { id: workspaceId };
 
   const identified = await provider.validate(tokens.accessToken);
   if (!identified.ok) return identified;
