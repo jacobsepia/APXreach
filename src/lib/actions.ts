@@ -23,6 +23,7 @@ import { runSync } from "@/lib/sync";
 import { getProvider } from "@/lib/providers";
 import { getMailboxProvider } from "@/lib/mailbox/providers";
 import { sendFromMailbox } from "@/lib/mailbox/send";
+import { pollMailbox } from "@/lib/mailbox/poll";
 import { clientCredentials, revokeToken } from "@/lib/oauth";
 
 /*
@@ -531,6 +532,21 @@ export async function sendEmailFromRecord(formData: FormData): Promise<void> {
   }
 
   if (companyId) revalidatePath(`/companies/${companyId}`);
+  revalidatePath("/contacts");
+}
+
+/** Check the signed-in person's mailboxes for replies now, rather than waiting. */
+export async function pollMailboxesNow(): Promise<void> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) throw new Error("Not signed in.");
+  const mine = await db
+    .select()
+    .from(mailboxes)
+    .where(and(eq(mailboxes.userId, session.user.id), eq(mailboxes.status, "connected")));
+  for (const mailbox of mine) {
+    await pollMailbox(mailbox);
+  }
+  revalidatePath("/inbox");
   revalidatePath("/contacts");
 }
 

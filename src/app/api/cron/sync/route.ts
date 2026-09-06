@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { connections, db, workspaces } from "@/db";
 import { runSync } from "@/lib/sync";
+import { cronAuthorized } from "@/lib/cron-auth";
 
 /*
  * The scheduled sync. Until now the books only moved when somebody pressed
@@ -20,20 +21,8 @@ export const dynamic = "force-dynamic";
 /* A walk over several workspaces, each doing paged reads against the books. */
 export const maxDuration = 60;
 
-function authorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  /*
-   * No secret configured is a refusal, not a pass. The failure mode of the
-   * other choice is an endpoint that is open in exactly the environment where
-   * it matters, and it fails silently — the sync would still work.
-   */
-  if (!secret) return false;
-  const header = request.headers.get("authorization") ?? "";
-  return header === `Bearer ${secret}`;
-}
-
 export async function GET(request: Request) {
-  if (!authorized(request)) {
+  if (!cronAuthorized(request)) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 

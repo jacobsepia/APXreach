@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { ProviderResult } from "@/lib/providers";
 import type {
+  FetchResult,
+  IncomingMail,
   MailboxIdentity,
   MailboxProvider,
   MailboxProviderId,
@@ -26,19 +28,25 @@ import type {
  * line to add the day the assessment clears.
  */
 
+/**
+ * Zoho names its token scheme after itself and refuses "Bearer" outright.
+ * Passed explicitly rather than guessed from the URL: a data-centre host or a
+ * proxy without "zoho" in its name would otherwise silently send the wrong
+ * word and read as a revoked grant.
+ */
+type AuthScheme = "Bearer" | "Zoho-oauthtoken";
+
 async function getJson(
   url: string,
   accessToken: string,
   label: string,
+  scheme: AuthScheme = "Bearer",
 ): Promise<ProviderResult<unknown>> {
   let response: Response;
   try {
     response = await fetch(url, {
       headers: {
-        /* Zoho's own scheme name, not Bearer — it refuses Bearer outright. */
-        Authorization: url.includes("zoho")
-          ? `Zoho-oauthtoken ${accessToken}`
-          : `Bearer ${accessToken}`,
+        Authorization: `${scheme} ${accessToken}`,
         Accept: "application/json",
       },
       cache: "no-store",
@@ -90,15 +98,14 @@ async function postJson(
   accessToken: string,
   label: string,
   body: unknown,
+  scheme: AuthScheme = "Bearer",
 ): Promise<ProviderResult<unknown>> {
   let response: Response;
   try {
     response = await fetch(url, {
       method: "POST",
       headers: {
-        Authorization: url.includes("zoho")
-          ? `Zoho-oauthtoken ${accessToken}`
-          : `Bearer ${accessToken}`,
+        Authorization: `${scheme} ${accessToken}`,
         "Content-Type": "application/json",
         Accept: "application/json",
       },
@@ -182,6 +189,57 @@ export function buildRfc822(from: string, mail: OutgoingMail): string {
   ].join("\r\n");
 }
 
+
+/**
+ * Good enough for a preview and a timeline line: tags out, the handful of
+ * entities mail clients actually emit decoded, whitespace collapsed. Not a
+ * renderer — the HTML is kept alongside for the day the Inbox shows it.
+ */
+export function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|tr|li|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ ?\n ?/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** "Jane Doe <jane@x.ca>" or "jane@x.ca" → the address, lower-cased. */
+function bareAddress(value: string): string {
+  const angled = value.match(/<([^>]+)>/);
+  return (angled ? angled[1] : value).trim().toLowerCase();
+}
+
+function readCursor<T extends object>(cursor: string | null): Partial<T> {
+  if (!cursor) return {};
+  try {
+    const parsed = JSON.parse(cursor) as unknown;
+    return typeof parsed === "object" && parsed !== null ? (parsed as Partial<T>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Zoho gives receivedTime as a string of epoch milliseconds. Written so a
+ * seconds value would still land in the right decade rather than in 1970.
+ */
+function epochToDate(value: unknown): Date | null {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return new Date(n < 1e12 ? n * 1000 : n);
+}
+
 /*
  * Zoho runs separate data centres and an account exists in exactly one of
  * them: a token minted at accounts.zoho.com is meaningless to accounts.zoho.eu.
@@ -203,6 +261,39 @@ const zohoAccountsSchema = z.object({
     )
     .min(1),
 });
+
+
+const zohoFoldersSchema = z.object({
+  data: z.array(
+    z
+      .object({
+        folderId: z.union([z.string(), z.number()]),
+        folderName: z.string().optional(),
+        folderType: z.string().optional(),
+        path: z.string().optional(),
+      })
+      .passthrough(),
+  ),
+});
+
+const zohoMessagesSchema = z.object({
+  data: z.array(
+    z
+      .object({
+        messageId: z.union([z.string(), z.number()]),
+        folderId: z.union([z.string(), z.number()]).optional(),
+        fromAddress: z.string().optional(),
+        /** Zoho's word for the display name, not the address. */
+        sender: z.string().optional(),
+        subject: z.string().optional(),
+        summary: z.string().optional(),
+        receivedTime: z.union([z.string(), z.number()]).optional(),
+      })
+      .passthrough(),
+  ),
+});
+
+type ZohoCursor = { since: number; inboxFolderId: string };
 
 export const zohoMailbox: MailboxProvider = {
   id: "zoho",
@@ -226,7 +317,7 @@ export const zohoMailbox: MailboxProvider = {
     extraAuthorizeParams: { access_type: "offline", prompt: "consent" },
   },
   async identify(accessToken) {
-    const result = await getJson(`${ZOHO_MAIL_API}/api/accounts`, accessToken, "Zoho Mail");
+    const result = await getJson(`${ZOHO_MAIL_API}/api/accounts`, accessToken, "Zoho Mail", "Zoho-oauthtoken");
     if (!result.ok) return result;
     const parsed = zohoAccountsSchema.safeParse(result.value);
     if (!parsed.success) {
@@ -260,11 +351,116 @@ export const zohoMailbox: MailboxProvider = {
         content: mail.html ?? mail.text,
         mailFormat: mail.html ? "html" : "plaintext",
       },
+      "Zoho-oauthtoken",
     );
     if (!result.ok) return result;
     const body = result.value as { data?: { messageId?: unknown } };
     const id = body?.data?.messageId;
     return { ok: true, value: { providerMessageId: id == null ? null : String(id) } };
+  },
+
+  /*
+   * Zoho's listing is by folder and newest-first, with no "since" parameter,
+   * so the poll reads the top of the inbox and keeps what is newer than the
+   * last receivedTime it saw. Fifty at a time is plenty for a person's inbox
+   * polled every few minutes, and bounded is the point.
+   */
+  async fetchSince(accessToken, mailbox, cursor): Promise<ProviderResult<FetchResult>> {
+    if (!mailbox.providerAccountId) {
+      return { ok: false, error: "Reconnect the Zoho mailbox — its account id is missing." };
+    }
+    const account = mailbox.providerAccountId;
+    const state = readCursor<ZohoCursor>(cursor);
+
+    let inboxFolderId = state.inboxFolderId;
+    if (!inboxFolderId) {
+      const folders = await getJson(`${ZOHO_MAIL_API}/api/accounts/${account}/folders`, accessToken, "Zoho Mail", "Zoho-oauthtoken");
+      if (!folders.ok) return folders;
+      const parsed = zohoFoldersSchema.safeParse(folders.value);
+      if (!parsed.success) {
+        console.error("[mailbox] zoho folders shape:", JSON.stringify(folders.value).slice(0, 500));
+        return { ok: false, error: "Zoho Mail's folder list is not in the shape this version expects." };
+      }
+      const inbox = parsed.data.data.find(
+        (f) =>
+          f.folderType?.toLowerCase() === "inbox" ||
+          f.folderName?.toLowerCase() === "inbox" ||
+          f.path?.toLowerCase() === "/inbox",
+      );
+      if (!inbox) {
+        return {
+          ok: false,
+          error: `Zoho Mail did not list an Inbox (saw: ${parsed.data.data.map((f) => f.folderName ?? f.path ?? "?").join(", ")}).`,
+        };
+      }
+      inboxFolderId = String(inbox.folderId);
+    }
+
+    const listed = await getJson(
+      `${ZOHO_MAIL_API}/api/accounts/${account}/messages/view?folderId=${encodeURIComponent(inboxFolderId)}&limit=50`,
+      accessToken,
+      "Zoho Mail",
+      "Zoho-oauthtoken",
+    );
+    if (!listed.ok) return listed;
+    const parsed = zohoMessagesSchema.safeParse(listed.value);
+    if (!parsed.success) {
+      console.error("[mailbox] zoho messages shape:", JSON.stringify(listed.value).slice(0, 500));
+      return { ok: false, error: "Zoho Mail's message list is not in the shape this version expects." };
+    }
+
+    const since = state.since ?? 0;
+    let newest = since;
+    const messages: IncomingMail[] = [];
+    for (const m of parsed.data.data) {
+      const receivedAt = epochToDate(m.receivedTime);
+      if (!receivedAt) continue;
+      if (receivedAt.getTime() <= since) continue;
+      newest = Math.max(newest, receivedAt.getTime());
+      if (!m.fromAddress) continue;
+      messages.push({
+        providerMessageId: String(m.messageId),
+        providerRef: `${m.folderId ?? inboxFolderId}/${m.messageId}`,
+        fromAddress: bareAddress(m.fromAddress),
+        fromName: m.sender?.trim() || null,
+        subject: m.subject?.trim() || "(no subject)",
+        snippet: (m.summary ?? "").trim(),
+        bodyText: null,
+        bodyHtml: null,
+        receivedAt,
+        internetMessageId: null,
+      });
+    }
+    /* Oldest first, so a partial failure leaves the cursor at a sane place. */
+    messages.sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime());
+
+    const next: ZohoCursor = { since: newest, inboxFolderId };
+    return { ok: true, value: { messages, cursor: JSON.stringify(next) } };
+  },
+
+  async fetchBody(accessToken, mailbox, providerRef) {
+    if (!mailbox.providerAccountId) {
+      return { ok: false, error: "Reconnect the Zoho mailbox — its account id is missing." };
+    }
+    const [folderId, messageId] = providerRef.split("/");
+    const result = await getJson(
+      `${ZOHO_MAIL_API}/api/accounts/${mailbox.providerAccountId}/folders/${folderId}/messages/${messageId}/content`,
+      accessToken,
+      "Zoho Mail",
+      "Zoho-oauthtoken",
+    );
+    if (!result.ok) return result;
+    const content = (result.value as { data?: { content?: unknown } })?.data?.content;
+    if (typeof content !== "string") {
+      return { ok: true, value: { bodyText: null, bodyHtml: null } };
+    }
+    const looksHtml = /<[a-z][\s\S]*>/i.test(content);
+    return {
+      ok: true,
+      value: looksHtml
+        ? { bodyText: htmlToText(content), bodyHtml: content }
+        : { bodyText: content, bodyHtml: null },
+    };
   },
 };
 
@@ -332,6 +528,31 @@ export const googleMailbox: MailboxProvider = {
     };
   },
 };
+
+
+const graphMessagesSchema = z.object({
+  value: z.array(
+    z
+      .object({
+        id: z.string(),
+        subject: z.string().nullable().optional(),
+        from: z
+          .object({
+            emailAddress: z
+              .object({ name: z.string().optional(), address: z.string().optional() })
+              .optional(),
+          })
+          .optional(),
+        receivedDateTime: z.string(),
+        bodyPreview: z.string().optional(),
+        body: z.object({ contentType: z.string().optional(), content: z.string().optional() }).optional(),
+        internetMessageId: z.string().nullable().optional(),
+      })
+      .passthrough(),
+  ),
+});
+
+type GraphCursor = { since: string };
 
 export const microsoftMailbox: MailboxProvider = {
   id: "microsoft",
@@ -401,6 +622,56 @@ export const microsoftMailbox: MailboxProvider = {
     );
     if (!result.ok) return result;
     return { ok: true, value: { providerMessageId: null } };
+  },
+
+  /*
+   * Graph filters server-side and returns the body in the listing, so one
+   * call does the whole job. The cursor is the newest receivedDateTime seen.
+   */
+  async fetchSince(accessToken, _mailbox, cursor): Promise<ProviderResult<FetchResult>> {
+    const state = readCursor<GraphCursor>(cursor);
+    const params = new URLSearchParams({
+      $top: "50",
+      $orderby: "receivedDateTime desc",
+      $select: "id,subject,from,receivedDateTime,bodyPreview,body,internetMessageId",
+    });
+    if (state.since) params.set("$filter", `receivedDateTime gt ${state.since}`);
+    const listed = await getJson(
+      `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?${params.toString()}`,
+      accessToken,
+      "Outlook",
+    );
+    if (!listed.ok) return listed;
+    const parsed = graphMessagesSchema.safeParse(listed.value);
+    if (!parsed.success) {
+      console.error("[mailbox] graph messages shape:", JSON.stringify(listed.value).slice(0, 500));
+      return { ok: false, error: "Outlook's message list is not in the shape this version expects." };
+    }
+
+    let newest = state.since ?? "";
+    const messages: IncomingMail[] = [];
+    for (const m of parsed.data.value) {
+      const address = m.from?.emailAddress?.address;
+      if (!address) continue;
+      if (m.receivedDateTime > newest) newest = m.receivedDateTime;
+      const html = m.body?.contentType?.toLowerCase() === "html" ? (m.body?.content ?? null) : null;
+      const text = html ? htmlToText(html) : (m.body?.content ?? null);
+      messages.push({
+        providerMessageId: m.id,
+        providerRef: m.id,
+        fromAddress: address.toLowerCase(),
+        fromName: m.from?.emailAddress?.name?.trim() || null,
+        subject: m.subject?.trim() || "(no subject)",
+        snippet: (m.bodyPreview ?? "").trim(),
+        bodyText: text,
+        bodyHtml: html,
+        receivedAt: new Date(m.receivedDateTime),
+        internetMessageId: m.internetMessageId ?? null,
+      });
+    }
+    messages.sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime());
+    const next: GraphCursor = { since: newest };
+    return { ok: true, value: { messages, cursor: JSON.stringify(next) } };
   },
 };
 

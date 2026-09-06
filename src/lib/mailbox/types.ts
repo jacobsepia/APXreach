@@ -47,6 +47,29 @@ export interface SentMail {
   providerMessageId: string | null;
 }
 
+/** A message that arrived in the person's inbox, normalised across providers. */
+export interface IncomingMail {
+  providerMessageId: string;
+  /** Whatever the provider needs to find this message again; opaque here. */
+  providerRef: string;
+  fromAddress: string;
+  fromName: string | null;
+  subject: string;
+  /** The provider's short preview, always present even when the body is not. */
+  snippet: string;
+  bodyText: string | null;
+  bodyHtml: string | null;
+  receivedAt: Date;
+  /** The RFC Message-ID, where the provider exposes it, for threading. */
+  internetMessageId: string | null;
+}
+
+export interface FetchResult {
+  messages: IncomingMail[];
+  /** Opaque, provider-shaped; handed back unchanged on the next poll. */
+  cursor: string;
+}
+
 export interface MailboxProvider {
   id: MailboxProviderId;
   label: string;
@@ -70,4 +93,24 @@ export interface MailboxProvider {
     mailbox: { emailAddress: string; displayName: string | null; providerAccountId: string | null },
     mail: OutgoingMail,
   ): Promise<ProviderResult<SentMail>>;
+  /**
+   * New mail in the inbox since the cursor. Absent for a provider whose read
+   * scope Reach does not hold — Gmail, until the assessment clears — and the
+   * poll simply skips those mailboxes rather than failing on them.
+   */
+  fetchSince?(
+    accessToken: string,
+    mailbox: { emailAddress: string; providerAccountId: string | null },
+    cursor: string | null,
+  ): Promise<ProviderResult<FetchResult>>;
+  /**
+   * The full body of one message, for providers whose listing carries only
+   * a preview. Called only for mail that matched a contact, so a busy inbox
+   * full of newsletters costs one listing call and nothing more.
+   */
+  fetchBody?(
+    accessToken: string,
+    mailbox: { emailAddress: string; providerAccountId: string | null },
+    providerRef: string,
+  ): Promise<ProviderResult<{ bodyText: string | null; bodyHtml: string | null }>>;
 }

@@ -21,12 +21,17 @@ export function ComposeEmail({
   /** The connected mailbox's address, or null when there is none to send from. */
   from,
   defaultRecipientId,
+  defaultSubject,
+  buttonLabel = "Email",
   variant = "button",
 }: {
   companyId?: string;
   recipients: Recipient[];
   from: string | null;
   defaultRecipientId?: string;
+  /** Pre-filled for a reply: "Re: …". */
+  defaultSubject?: string;
+  buttonLabel?: string;
   variant?: "button" | "icon";
 }) {
   const [open, setOpen] = useState(false);
@@ -65,7 +70,7 @@ export function ComposeEmail({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Email"
+        aria-label={buttonLabel}
         className={
           variant === "icon"
             ? "flex size-7 items-center justify-center rounded-lg border border-transparent text-[var(--text-tertiary)] transition-colors hover:border-[rgba(21,24,28,0.14)] hover:bg-white hover:text-foreground"
@@ -73,11 +78,11 @@ export function ComposeEmail({
         }
       >
         <Mail className="size-3.5" />
-        {variant === "button" && <span>Email</span>}
+        {variant === "button" && <span>{buttonLabel}</span>}
       </button>
 
       {open && (
-        <Dialog title="New email" onClose={close}>
+        <Dialog title={defaultSubject ? "Reply" : "New email"} onClose={close}>
           {from === null ? (
             <div className="flex flex-col gap-3">
               <p className="text-[13px] leading-relaxed text-muted-foreground">
@@ -134,7 +139,13 @@ export function ComposeEmail({
               </div>
               <div className="flex flex-col gap-1">
                 <span className={label}>Subject</span>
-                <input name="subject" required autoFocus={recipients.length > 0} className={field} />
+                <input
+                  name="subject"
+                  required
+                  defaultValue={defaultSubject ?? ""}
+                  autoFocus={recipients.length > 0 && !defaultSubject}
+                  className={field}
+                />
               </div>
               <div className="flex flex-col gap-1">
                 <span className={label}>Message</span>
@@ -142,6 +153,7 @@ export function ComposeEmail({
                   name="body"
                   required
                   rows={7}
+                  autoFocus={Boolean(defaultSubject)}
                   className="w-full resize-y rounded-[10px] border border-[rgba(21,24,28,0.14)] bg-white px-3 py-2 text-[13px] leading-relaxed text-[#15181c] outline-none focus:border-[#6b21a8]"
                 />
               </div>

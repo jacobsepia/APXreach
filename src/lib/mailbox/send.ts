@@ -26,7 +26,7 @@ const RENEW_WITHIN_MS = 60_000;
  * refresh tokens treats the old one as spent — using a pair before saving it
  * is how a connection ends up unrecoverable after one crash.
  */
-async function accessTokenFor(mailbox: MailboxRow): Promise<ProviderResult<string>> {
+export async function accessTokenFor(mailbox: MailboxRow): Promise<ProviderResult<string>> {
   const provider = getMailboxProvider(mailbox.provider);
   if (!provider) return { ok: false, error: "That mail provider is no longer supported." };
 
