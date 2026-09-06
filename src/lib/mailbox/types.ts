@@ -32,6 +32,13 @@ export interface MailboxIdentity {
   providerAccountId?: string | null;
 }
 
+/** A file riding along with the message, already in memory: small by rule. */
+export interface MailAttachment {
+  filename: string;
+  contentType: string;
+  content: Buffer;
+}
+
 export interface OutgoingMail {
   to: string;
   subject: string;
@@ -40,6 +47,7 @@ export interface OutgoingMail {
   html?: string;
   /** Threads a reply onto the message it answers, where the provider can. */
   inReplyTo?: string | null;
+  attachments?: MailAttachment[];
 }
 
 export interface SentMail {

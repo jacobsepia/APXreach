@@ -37,7 +37,7 @@ export async function loadContactRecord(rawId: string) {
       id: emailMessages.id, direction: emailMessages.direction,
       fromAddress: emailMessages.fromAddress, toAddress: emailMessages.toAddress,
       subject: emailMessages.subject, bodyText: emailMessages.bodyText, bodyHtml: emailMessages.bodyHtml,
-      sentAt: emailMessages.sentAt,
+      attachments: emailMessages.attachments, sentAt: emailMessages.sentAt,
     }).from(emailMessages)
       .where(and(eq(emailMessages.contactId, id), eq(emailMessages.workspaceId, workspaceId)))
       .orderBy(desc(emailMessages.sentAt)).limit(100),

@@ -9,7 +9,9 @@ import styles from "./contact-record-modal.module.css";
 
 export type TemplateDraft = NonNullable<Awaited<ReturnType<typeof prepareTemplateDraft>>["data"]>;
 type Props = { contactId: string; firstName: string; templates: EmailTemplate[]; value: string; disabled: boolean; dirty: boolean;
-  onChange: (html: string, text: string) => void; onApply: (draft: TemplateDraft) => void };
+  onChange: (html: string, text: string) => void; onApply: (draft: TemplateDraft) => void;
+  /** Rendered beside the template dropdown — the attach button lives here. */
+  toolbarExtra?: React.ReactNode };
 
 export default function TemplateEmailEditor(props: Props) {
   const [key, setKey] = useState("");
@@ -44,9 +46,9 @@ export default function TemplateEmailEditor(props: Props) {
   };
   const fieldsNeeded = preview?.missing.filter(tag => !tag.startsWith("invoice_")) ?? [];
   return <EmailEditor value={props.value} disabled={props.disabled || busy} firstName={props.firstName} onChange={props.onChange}
-    toolbarEnd={<select aria-label="Email templates" value={key} disabled={props.disabled || busy} onChange={event => { const selected = event.target.value; if (!selected) { dismiss(); return; } setKey(selected); setFields({}); setInvoice(""); setPreview(null); void load(selected, false, true); }}>
+    toolbarEnd={<><select aria-label="Email templates" value={key} disabled={props.disabled || busy} onChange={event => { const selected = event.target.value; if (!selected) { dismiss(); return; } setKey(selected); setFields({}); setInvoice(""); setPreview(null); void load(selected, false, true); }}>
       <option value="">Templates…</option>{props.templates.map(template => <option key={template.key} value={template.key}>{template.name}</option>)}
-    </select>}
+    </select>{props.toolbarExtra}</>}
     belowToolbar={key ? <div className={styles.templatePanel} aria-label="Personalize template">
       <div className={styles.templatePanelHeading}><strong>{props.templates.find(template => template.key === key)?.name}</strong><Link href="/settings/templates" target="_blank" rel="noopener noreferrer">Manage templates ↗</Link></div>
       {busy && <p role="status">Personalizing your email…</p>}

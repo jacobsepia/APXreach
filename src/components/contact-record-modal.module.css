@@ -162,7 +162,17 @@
 .formatToolbar button[aria-pressed=true] { background:#eadcf4; border-color:#d9c4e8; color:#713c92; }
 .formatToolbar select:focus-visible { outline:2px solid #b48acc; outline-offset:2px; }
 .formatDivider { height:17px; width:1px; background:#e6dced; margin:0 3px; }
-.toolbarEnd { margin-left:auto; min-width:0; }
+.toolbarEnd { display:flex; align-items:center; gap:6px; margin-left:auto; min-width:0; }
+.attachButton { position:relative; }
+.attachButton span { position:absolute; top:-4px; right:-4px; min-width:14px; height:14px; padding:0 3px; border-radius:7px; background:#6b21a8; color:#fff; font-size:9px; font-weight:700; line-height:14px; text-align:center; }
+.attachmentRow { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:6px 16px; border-bottom:1px solid #f1eaf6; }
+.attachmentChip { display:inline-flex; align-items:center; gap:5px; height:22px; max-width:280px; padding:0 8px; border:1px solid #e3d6ee; border-radius:999px; background:#faf6fe; color:#5d3f6f; font-size:11px; }
+.attachmentChip > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.attachmentChip small { flex-shrink:0; color:#a78cb8; font-size:10px; }
+.attachmentChip button { display:grid; place-items:center; flex-shrink:0; width:16px; height:16px; padding:0; border:0; border-radius:8px; background:none; color:#8f759f; }
+.attachmentChip button:hover { background:#eadcf4; color:#713c92; }
+.attachmentError { font-size:11px; color:#a66a29; }
+.attachmentList { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
 .formatToolbar .toolbarEnd select { max-width:195px; background:#f2eaf9; color:#713c92; border-color:#ddc9ec; font-weight:600; }
 .templatePanel { flex-shrink:1; min-height:0; max-height:220px; overflow:auto; padding:10px 14px; background:#faf6fe; border-bottom:1px solid #e8dced; color:#795d89; font-size:11px; }
 .templatePanelHeading, .templatePanelActions { display:flex; align-items:center; justify-content:space-between; gap:10px; }

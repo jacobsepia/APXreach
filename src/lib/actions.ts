@@ -26,6 +26,7 @@ import { getProvider } from "@/lib/providers";
 import { getMailboxProvider } from "@/lib/mailbox/providers";
 import { sendFromMailbox } from "@/lib/mailbox/send";
 import { pollMailbox } from "@/lib/mailbox/poll";
+import { attachmentProblem, formatBytes } from "@/lib/email-attachments";
 import { prepareEmailBody } from "@/lib/email-content";
 import { hasUnresolvedTags } from "@/lib/email-templates";
 import { contactTemplateContext } from "@/lib/email-template-store";
@@ -508,7 +509,23 @@ export async function sendEmailFromRecord(formData: FormData): Promise<void> {
     if (!company) throw new Error("That company is no longer here.");
   }
 
-  const sent = await sendFromMailbox(mailbox, { to, subject, text, html });
+  /* Files, if any. The same rule the composer applied, applied again here,
+     because a request does not have to come from the composer. */
+  const files = formData
+    .getAll("attachments")
+    .filter((entry): entry is File => entry instanceof File && entry.size > 0 && Boolean(entry.name));
+  const problem = attachmentProblem(files);
+  if (problem) throw new Error(problem);
+  const attachments = await Promise.all(
+    files.map(async (file) => ({
+      filename: file.name,
+      contentType: file.type || "application/octet-stream",
+      content: Buffer.from(await file.arrayBuffer()),
+    })),
+  );
+  const attachmentRecord = files.map((file) => ({ name: file.name, size: file.size, type: file.type || "application/octet-stream" }));
+
+  const sent = await sendFromMailbox(mailbox, { to, subject, text, html, attachments });
   if (!sent.ok) throw new Error(sent.error);
 
   await db.insert(emailMessages).values({
@@ -522,14 +539,18 @@ export async function sendEmailFromRecord(formData: FormData): Promise<void> {
     subject,
     bodyText: text,
     bodyHtml: html ?? null,
+    attachments: attachmentRecord.length ? attachmentRecord : null,
     providerMessageId: sent.value.providerMessageId,
   });
 
+  const attachedLine = attachmentRecord.length
+    ? `\n\nAttached: ${attachmentRecord.map((file) => `${file.name} (${formatBytes(file.size)})`).join(", ")}`
+    : "";
   await db.insert(activities).values({
     workspaceId: wsId,
     type: "email",
     subject: `Email sent — ${subject}`,
-    body: `To ${to}\n\n${text}`,
+    body: `To ${to}\n\n${text}${attachedLine}`,
     companyId: companyId || null,
     contactId: contactId || null,
     actorName: session.user.name ?? mailbox.emailAddress,

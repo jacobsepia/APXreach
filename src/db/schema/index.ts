@@ -1,6 +1,7 @@
 import {
   date,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -226,6 +227,8 @@ export const emailMessages = pgTable("email_messages", {
   providerMessageId: text("provider_message_id"),
   /** The outbound message this one answers, for threading in the Inbox. */
   inReplyToId: uuid("in_reply_to_id"),
+  /** What was attached — names, sizes and types. The bytes live in the mailbox's Sent folder, not here. */
+  attachments: jsonb("attachments").$type<Array<{ name: string; size: number; type: string }>>(),
   sentAt: timestamp("sent_at", { withTimezone: true }).defaultNow().notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });

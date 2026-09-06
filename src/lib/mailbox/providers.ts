@@ -3,6 +3,7 @@ import type { ProviderResult } from "@/lib/providers";
 import type {
   FetchResult,
   IncomingMail,
+  MailAttachment,
   MailboxIdentity,
   MailboxProvider,
   MailboxProviderId,
@@ -100,16 +101,28 @@ async function postJson(
   body: unknown,
   scheme: AuthScheme = "Bearer",
 ): Promise<ProviderResult<unknown>> {
+  return postBody(url, accessToken, label, JSON.stringify(body), "application/json", scheme);
+}
+
+/** A POST of any bytes — JSON, a raw RFC 822 message, a file — with one reading of the refusals. */
+async function postBody(
+  url: string,
+  accessToken: string,
+  label: string,
+  body: string | Blob,
+  contentType: string,
+  scheme: AuthScheme = "Bearer",
+): Promise<ProviderResult<unknown>> {
   let response: Response;
   try {
     response = await fetch(url, {
       method: "POST",
       headers: {
         Authorization: `${scheme} ${accessToken}`,
-        "Content-Type": "application/json",
+        "Content-Type": contentType,
         Accept: "application/json",
       },
-      body: JSON.stringify(body),
+      body,
       cache: "no-store",
     });
   } catch {
@@ -158,8 +171,23 @@ export function formatAddress(email: string, displayName: string | null): string
  * plain text when it cannot; a text-only fallback is not optional, because
  * plenty of filters score HTML-only mail as spam.
  */
+function attachmentPart(boundary: string, attachment: MailAttachment): string[] {
+  /* Quotes and line breaks in a filename would end the header early; a
+     non-ASCII name goes through the same encoding as a subject line. */
+  const name = encodeHeader(attachment.filename.replace(/["\r\n]/g, "_"));
+  return [
+    `--${boundary}`,
+    `Content-Type: ${attachment.contentType || "application/octet-stream"}; name="${name}"`,
+    `Content-Disposition: attachment; filename="${name}"`,
+    "Content-Transfer-Encoding: base64",
+    "",
+    attachment.content.toString("base64").replace(/(.{76})/g, "$1\r\n"),
+  ];
+}
+
 export function buildRfc822(from: string, mail: OutgoingMail): string {
-  const boundary = `apxreach_${Math.random().toString(36).slice(2)}`;
+  const alternative = `apxreach_alt_${Math.random().toString(36).slice(2)}`;
+  const mixed = `apxreach_mix_${Math.random().toString(36).slice(2)}`;
   const headers = [
     `From: ${from}`,
     `To: ${mail.to}`,
@@ -169,22 +197,34 @@ export function buildRfc822(from: string, mail: OutgoingMail): string {
   if (mail.inReplyTo) {
     headers.push(`In-Reply-To: ${mail.inReplyTo}`, `References: ${mail.inReplyTo}`);
   }
-  if (!mail.html) {
-    headers.push('Content-Type: text/plain; charset="UTF-8"', "", mail.text);
-    return headers.join("\r\n");
-  }
-  headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`, "");
+  const body = mail.html
+    ? [
+        `Content-Type: multipart/alternative; boundary="${alternative}"`,
+        "",
+        `--${alternative}`,
+        'Content-Type: text/plain; charset="UTF-8"',
+        "",
+        mail.text,
+        `--${alternative}`,
+        'Content-Type: text/html; charset="UTF-8"',
+        "",
+        mail.html,
+        `--${alternative}--`,
+      ]
+    : ['Content-Type: text/plain; charset="UTF-8"', "", mail.text];
+
+  const attachments = mail.attachments ?? [];
+  if (!attachments.length) return [...headers, ...body, ""].join("\r\n");
+
+  /* Files wrap the whole message: mixed on the outside, the text/HTML pair inside. */
   return [
     ...headers,
-    `--${boundary}`,
-    'Content-Type: text/plain; charset="UTF-8"',
+    `Content-Type: multipart/mixed; boundary="${mixed}"`,
     "",
-    mail.text,
-    `--${boundary}`,
-    'Content-Type: text/html; charset="UTF-8"',
-    "",
-    mail.html,
-    `--${boundary}--`,
+    `--${mixed}`,
+    ...body,
+    ...attachments.flatMap((attachment) => attachmentPart(mixed, attachment)),
+    `--${mixed}--`,
     "",
   ].join("\r\n");
 }
@@ -295,6 +335,19 @@ const zohoMessagesSchema = z.object({
 
 type ZohoCursor = { since: number; inboxFolderId: string };
 
+/* Zoho takes attachments in two steps: upload each file, then name the
+   uploads in the send. The upload's reply is the handle the send needs. */
+const zohoAttachmentRef = z
+  .object({
+    storeName: z.string(),
+    attachmentPath: z.string(),
+    attachmentName: z.string().optional(),
+  })
+  .passthrough();
+const zohoAttachmentSchema = z.object({
+  data: z.union([zohoAttachmentRef, z.array(zohoAttachmentRef).min(1)]),
+});
+
 export const zohoMailbox: MailboxProvider = {
   id: "zoho",
   label: "Zoho Mail",
@@ -340,8 +393,34 @@ export const zohoMailbox: MailboxProvider = {
     if (!mailbox.providerAccountId) {
       return { ok: false, error: "Reconnect the Zoho mailbox — its account id is missing." };
     }
+    const account = mailbox.providerAccountId;
+
+    const uploaded: Array<{ storeName: string; attachmentPath: string; attachmentName: string }> = [];
+    for (const attachment of mail.attachments ?? []) {
+      const upload = await postBody(
+        `${ZOHO_MAIL_API}/api/accounts/${account}/messages/attachments?fileName=${encodeURIComponent(attachment.filename)}&isInline=false`,
+        accessToken,
+        "Zoho Mail",
+        new Blob([Uint8Array.from(attachment.content)]),
+        attachment.contentType || "application/octet-stream",
+        "Zoho-oauthtoken",
+      );
+      if (!upload.ok) return { ok: false, error: `Zoho Mail did not take "${attachment.filename}": ${upload.error}` };
+      const parsed = zohoAttachmentSchema.safeParse(upload.value);
+      if (!parsed.success) {
+        console.error("[mailbox] zoho attachment shape:", JSON.stringify(upload.value).slice(0, 500));
+        return { ok: false, error: "Zoho Mail accepted the file but answered in a shape this version does not expect." };
+      }
+      const ref = Array.isArray(parsed.data.data) ? parsed.data.data[0] : parsed.data.data;
+      uploaded.push({
+        storeName: ref.storeName,
+        attachmentPath: ref.attachmentPath,
+        attachmentName: ref.attachmentName ?? attachment.filename,
+      });
+    }
+
     const result = await postJson(
-      `${ZOHO_MAIL_API}/api/accounts/${mailbox.providerAccountId}/messages`,
+      `${ZOHO_MAIL_API}/api/accounts/${account}/messages`,
       accessToken,
       "Zoho Mail",
       {
@@ -350,6 +429,7 @@ export const zohoMailbox: MailboxProvider = {
         subject: mail.subject,
         content: mail.html ?? mail.text,
         mailFormat: mail.html ? "html" : "plaintext",
+        ...(uploaded.length ? { attachments: uploaded } : {}),
       },
       "Zoho-oauthtoken",
     );
@@ -510,16 +590,26 @@ export const googleMailbox: MailboxProvider = {
   },
 
   async send(accessToken, mailbox, mail): Promise<ProviderResult<SentMail>> {
-    const raw = Buffer.from(
+    const message = Buffer.from(
       buildRfc822(formatAddress(mailbox.emailAddress, mailbox.displayName), mail),
       "utf8",
-    ).toString("base64url");
-    const result = await postJson(
-      "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
-      accessToken,
-      "Gmail",
-      { raw },
     );
+    /* With files aboard the message goes up as bytes through the upload
+       endpoint, which takes far more than the JSON field's base64 will. */
+    const result = mail.attachments?.length
+      ? await postBody(
+          "https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=media",
+          accessToken,
+          "Gmail",
+          new Blob([Uint8Array.from(message)]),
+          "message/rfc822",
+        )
+      : await postJson(
+          "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+          accessToken,
+          "Gmail",
+          { raw: message.toString("base64url") },
+        );
     if (!result.ok) return result;
     const body = result.value as { id?: unknown };
     return {
@@ -616,6 +706,16 @@ export const microsoftMailbox: MailboxProvider = {
             content: mail.html ?? mail.text,
           },
           toRecipients: [{ emailAddress: { address: mail.to } }],
+          ...(mail.attachments?.length
+            ? {
+                attachments: mail.attachments.map((attachment) => ({
+                  "@odata.type": "#microsoft.graph.fileAttachment",
+                  name: attachment.filename,
+                  contentType: attachment.contentType || "application/octet-stream",
+                  contentBytes: attachment.content.toString("base64"),
+                })),
+              }
+            : {}),
         },
         saveToSentItems: true,
       },

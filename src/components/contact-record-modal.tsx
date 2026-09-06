@@ -4,7 +4,8 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDownLeft, ArrowUpRight, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, Clock3, FileText, Inbox, LoaderCircle, Mail, MessageSquareText, Phone, Search, Send, StickyNote, Undo2, UserRound, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, Clock3, FileText, Inbox, LoaderCircle, Mail, MessageSquareText, Paperclip, Phone, Search, Send, StickyNote, Undo2, UserRound, X } from "lucide-react";
+import { attachmentProblem, formatBytes, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES } from "@/lib/email-attachments";
 import { loadContactRecord } from "@/lib/contact-record";
 import { sendEmailFromRecord } from "@/lib/actions";
 import { rewriteEmailTone } from "@/lib/email-tone-actions";
@@ -53,6 +54,7 @@ function MessageCard({ message }: { message: Message }) {
           <dt>To</dt><dd>{message.toAddress}</dd>
         </dl>
         {message.bodyHtml ? <div className={`${styles.emailBody} ${styles.richHistory}`} dangerouslySetInnerHTML={{ __html: message.bodyHtml }} /> : <div className={styles.emailBody}>{message.bodyText || "No message content is available."}</div>}
+        {message.attachments?.length ? <div className={styles.attachmentList} aria-label="Attachments">{message.attachments.map((file, index) => <span key={file.name + index} className={styles.attachmentChip} title={file.name}><Paperclip size={11} /><span>{file.name}</span><small>{formatBytes(file.size)}</small></span>)}</div> : null}
         <div className={styles.messageFoot}><CheckCircle2 size={13} /> {outbound ? "Sent through your connected mailbox" : "Received in your connected mailbox"}</div>
       </div>
     </details>
@@ -80,6 +82,10 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
   const [rewriting, setRewriting] = useState<Tone | null>(null);
   const [rewriteError, setRewriteError] = useState<string | null>(null);
   const [undoDraft, setUndoDraft] = useState<{ body: string; bodyHtml: string; tone: Tone } | null>(null);
+  /* Files to send along. Held in memory until Send; nothing is uploaded early. */
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const sendingRef = useRef(false);
@@ -89,16 +95,32 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
   const name = (contact.firstName + " " + contact.lastName).trim();
   const initials = [contact.firstName, contact.lastName].filter(Boolean).map((part) => part[0]).join("").toUpperCase();
   const hasMessage = !isSignatureOnly(body, signatureText.current);
-  const dirty = Boolean(subject.trim() || hasMessage);
+  const dirty = Boolean(subject.trim() || hasMessage || attachments.length);
   const unresolved = hasUnresolvedTags(subject + body);
 
   const busy = sending || rewriting !== null;
   const clearRewrite = () => { setUndoDraft(null); setRewriteError(null); };
+  const clearAttachments = () => { setAttachments([]); setAttachError(null); };
+
+  /* Adding never replaces: a second pick joins the first. The same file twice is one file. */
+  const addFiles = (picked: FileList | null) => {
+    if (fileInput.current) fileInput.current.value = "";
+    if (!picked?.length) return;
+    const merged = [...attachments];
+    for (const file of Array.from(picked)) {
+      if (!merged.some((existing) => existing.name === file.name && existing.size === file.size)) merged.push(file);
+    }
+    const problem = attachmentProblem(merged);
+    if (problem) { setAttachError(problem); return; }
+    setAttachError(null);
+    setAttachments(merged);
+  };
+  const removeFile = (index: number) => { setAttachments(attachments.filter((_, i) => i !== index)); setAttachError(null); };
 
   const requestClose = () => {
     if (sendingRef.current || rewritingRef.current) return;
     if (dirty) { setConfirmClose(true); return; }
-    setBody(""); setBodyHtml(""); signatureInitialized.current = false; signatureText.current = ""; clearRewrite();
+    setBody(""); setBodyHtml(""); signatureInitialized.current = false; signatureText.current = ""; clearRewrite(); clearAttachments();
     setOpen(false);
   };
 
@@ -179,9 +201,12 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
     form.set("body", body);
     form.set("bodyHtml", bodyHtml);
     if (invoiceReference) form.set("templateInvoice", JSON.stringify(invoiceReference));
+    const problem = attachmentProblem(attachments);
+    if (problem) { setAttachError(problem); sendingRef.current = false; setSending(false); return; }
+    for (const file of attachments) form.append("attachments", file);
     try {
       await sendEmailFromRecord(form);
-      setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); setQuery(""); signatureInitialized.current = false; signatureText.current = ""; clearRewrite();
+      setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); setQuery(""); signatureInitialized.current = false; signatureText.current = ""; clearRewrite(); clearAttachments();
       setView("emails");
       setNotice("Email sent from " + data.mailbox.emailAddress + ".");
       refresh();
@@ -225,7 +250,7 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
             {confirmClose && <div className={styles.discardBar} role="alert">
               <span>You have an unsent draft. Discard it and close?</span>
               <button type="button" className={styles.secondaryButton} onClick={() => { setConfirmClose(false); setView("compose"); }}>Keep writing</button>
-              <button type="button" className={styles.textButton} onClick={() => { setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); signatureInitialized.current = false; signatureText.current = ""; clearRewrite(); setConfirmClose(false); setOpen(false); }}>Discard draft</button>
+              <button type="button" className={styles.textButton} onClick={() => { setSubject(""); setBody(""); setBodyHtml(""); setInvoiceReference(null); signatureInitialized.current = false; signatureText.current = ""; clearRewrite(); clearAttachments(); setConfirmClose(false); setOpen(false); }}>Discard draft</button>
             </div>}
 
             <div className={styles.workspace}>
@@ -300,7 +325,20 @@ export function ContactRecordModal({ contact, children }: { contact: ContactReco
                               ))}
                             </div>
                           </div>
-                          <TemplateEmailEditor contactId={contact.id} templates={data.templates} value={bodyHtml} disabled={busy} firstName={contact.firstName} dirty={dirty} onChange={(html, text) => { setBodyHtml(html); setBody(text); }} onApply={draft => { setSubject(draft.subject); setBodyHtml(draft.bodyHtml); setBody(draft.text); setInvoiceReference(draft.invoiceReference); setSendError(null); clearRewrite(); }} />
+                          {(attachments.length > 0 || attachError) && (
+                            <div className={styles.attachmentRow} aria-label="Attachments">
+                              {attachments.map((file, index) => (
+                                <span key={file.name + file.size} className={styles.attachmentChip} title={file.name}>
+                                  <Paperclip size={11} /><span>{file.name}</span><small>{formatBytes(file.size)}</small>
+                                  <button type="button" aria-label={"Remove " + file.name} disabled={busy} onClick={() => removeFile(index)}><X size={11} /></button>
+                                </span>
+                              ))}
+                              {attachError && <span role="alert" className={styles.attachmentError}>{attachError}</span>}
+                            </div>
+                          )}
+                          <input ref={fileInput} type="file" multiple hidden aria-hidden="true" tabIndex={-1} onChange={(event) => addFiles(event.target.files)} />
+                          <TemplateEmailEditor contactId={contact.id} templates={data.templates} value={bodyHtml} disabled={busy} firstName={contact.firstName} dirty={dirty} onChange={(html, text) => { setBodyHtml(html); setBody(text); }} onApply={draft => { setSubject(draft.subject); setBodyHtml(draft.bodyHtml); setBody(draft.text); setInvoiceReference(draft.invoiceReference); setSendError(null); clearRewrite(); }}
+                            toolbarExtra={<button type="button" className={styles.attachButton} aria-label="Attach files" title={`Attach files — up to ${MAX_ATTACHMENTS}, ${formatBytes(MAX_ATTACHMENT_BYTES)} total`} disabled={busy} onMouseDown={(event) => event.preventDefault()} onClick={() => fileInput.current?.click()}><Paperclip size={15} />{attachments.length > 0 && <span>{attachments.length}</span>}</button>} />
                           {unresolved && <div role="alert" className={styles.error}>Fill in or remove the remaining {"{{tags}}"} before sending.</div>}
                           {rewriteError && <div role="alert" className={styles.error}>{rewriteError}</div>}
                           {sendError && <div role="alert" className={styles.error}>{sendError}</div>}
