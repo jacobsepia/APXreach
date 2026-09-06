@@ -101,6 +101,8 @@ export const pipelines = pgTable("pipelines", {
   workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
   name: text("name").notNull(),
   displayOrder: integer("display_order").default(0).notNull(),
+  /** sales — deals move through it; support — tickets do. Same stages engine, separate boards. */
+  kind: text("kind").default("sales").notNull(),
 });
 
 export const pipelineStages = pgTable("pipeline_stages", {
@@ -322,4 +324,32 @@ export const sequenceEnrollments = pgTable("sequence_enrollments", {
   lastError: text("last_error"),
   startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
   endedAt: timestamp("ended_at", { withTimezone: true }),
+});
+
+/*
+ * Tickets: support work on the same stage engine as deals, in a pipeline of
+ * its own kind. A ticket knows who raised it, what it was raised from (an
+ * inbound email, when that is where it came from), and the two clocks a
+ * service promise is measured by: first response and resolution.
+ */
+export const tickets = pgTable("tickets", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
+  pipelineId: uuid("pipeline_id").references(() => pipelines.id).notNull(),
+  stageId: uuid("stage_id").references(() => pipelineStages.id).notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  priority: text("priority").default("normal").notNull(), // low | normal | high | urgent
+  status: text("status").default("open").notNull(), // open | resolved
+  companyId: uuid("company_id").references(() => companies.id),
+  contactId: uuid("contact_id").references(() => contacts.id),
+  ownerName: text("owner_name"),
+  /** The inbound email this ticket was made from, so the Inbox can say so. */
+  emailMessageId: uuid("email_message_id"),
+  firstResponseDueAt: timestamp("first_response_due_at", { withTimezone: true }).notNull(),
+  resolveDueAt: timestamp("resolve_due_at", { withTimezone: true }).notNull(),
+  firstRespondedAt: timestamp("first_responded_at", { withTimezone: true }),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

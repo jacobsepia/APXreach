@@ -17,7 +17,7 @@ export default async function DealsPage() {
   const [pipeline] = await db
     .select()
     .from(pipelines)
-    .where(eq(pipelines.workspaceId, workspaceId))
+    .where(and(eq(pipelines.workspaceId, workspaceId), eq(pipelines.kind, "sales")))
     .orderBy(asc(pipelines.displayOrder))
     .limit(1);
   if (!pipeline) {

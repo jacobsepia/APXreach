@@ -1,5 +1,5 @@
-import { and, desc, eq } from "drizzle-orm";
-import { companies, contacts, db, emailMessages, mailboxes } from "@/db";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { companies, contacts, db, emailMessages, mailboxes, tickets } from "@/db";
 import { requireTenant } from "@/lib/workspace";
 import { pollMailboxesNow } from "@/lib/actions";
 import { isFresh, pollMailbox } from "@/lib/mailbox/poll";
@@ -94,6 +94,15 @@ export default async function InboxPage() {
 
   const inboundCount = messages.filter((m) => m.direction === "inbound").length;
 
+  /* Which received emails already became tickets, so the button says so. */
+  const ticketRows = messages.length
+    ? await db
+        .select({ id: tickets.id, emailMessageId: tickets.emailMessageId })
+        .from(tickets)
+        .where(and(eq(tickets.workspaceId, workspaceId), inArray(tickets.emailMessageId, messages.map((m) => m.id))))
+    : [];
+  const ticketByMessage = new Map(ticketRows.map((row) => [row.emailMessageId, row.id]));
+
   if (mine.length === 0) {
     return (
       <EmptyState
@@ -130,6 +139,7 @@ export default async function InboxPage() {
       contactEmail: m.contactEmail,
       companyId: m.companyId,
       companyName: m.companyName,
+      ticketId: ticketByMessage.get(m.id) ?? null,
     };
   });
 

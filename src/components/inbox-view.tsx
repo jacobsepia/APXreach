@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, ChevronLeft, Paperclip } from "lucide-react";
 import { Avatar, Pill } from "@/components/ui";
 import { ComposeEmail } from "@/components/compose-email";
+import { MakeTicket } from "@/components/ticket-controls";
 import { formatBytes } from "@/lib/email-attachments";
 import styles from "./inbox-view.module.css";
 
@@ -33,6 +34,8 @@ export type InboxItem = {
   contactEmail: string | null;
   companyId: string | null;
   companyName: string | null;
+  /** The ticket already opened from this email, if any. */
+  ticketId: string | null;
 };
 
 const dayStamp = new Intl.DateTimeFormat("en-CA", { month: "short", day: "numeric" });
@@ -152,6 +155,14 @@ export function InboxView({ items }: { items: InboxItem[] }) {
                 <Pill kind={selected.direction === "inbound" ? "ledger" : "customer"}>
                   {selected.direction === "inbound" ? "Received" : "Sent"}
                 </Pill>
+                {selected.direction === "inbound" && (
+                  <MakeTicket
+                    key={selected.id}
+                    messageId={selected.id}
+                    ticketId={selected.ticketId}
+                    className="flex h-8 items-center gap-1.5 rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-foreground hover:border-[#6b21a8] disabled:opacity-60"
+                  />
+                )}
                 {selected.contactId && selected.contactEmail && (
                   <ComposeEmail
                     key={selected.id}

@@ -124,7 +124,7 @@ export default async function CompanyPage({
       .select({ id: pipelineStages.id, name: pipelineStages.name })
       .from(pipelineStages)
       .innerJoin(pipelines, eq(pipelineStages.pipelineId, pipelines.id))
-      .where(eq(pipelines.workspaceId, workspaceId))
+      .where(and(eq(pipelines.workspaceId, workspaceId), eq(pipelines.kind, "sales")))
       .orderBy(pipelines.displayOrder, pipelineStages.displayOrder),
     workspaceSequences(workspaceId),
     workspaceTemplates(workspaceId),

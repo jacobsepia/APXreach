@@ -678,7 +678,7 @@ async function assertCompany(wsId: string, id: string | null): Promise<void> {
 async function tenantStage(wsId: string, id: string) {
   const [row] = await db.select({ stage: pipelineStages }).from(pipelineStages)
     .innerJoin(pipelines, eq(pipelines.id, pipelineStages.pipelineId))
-    .where(and(eq(pipelineStages.id, z.uuid().parse(id)), eq(pipelines.workspaceId, wsId))).limit(1);
+    .where(and(eq(pipelineStages.id, z.uuid().parse(id)), eq(pipelines.workspaceId, wsId), eq(pipelines.kind, "sales"))).limit(1);
   if (!row) throw new Error("Stage unavailable.");
   return row.stage;
 }

@@ -73,7 +73,7 @@ export default async function AppLayout({
       .select({ id: pipelineStages.id, name: pipelineStages.name })
       .from(pipelineStages)
       .innerJoin(pipelines, eq(pipelines.id, pipelineStages.pipelineId))
-      .where(and(ne(pipelineStages.kind, "lost"), eq(pipelines.workspaceId, workspace.id)))
+      .where(and(ne(pipelineStages.kind, "lost"), eq(pipelines.workspaceId, workspace.id), eq(pipelines.kind, "sales")))
       .orderBy(asc(pipelineStages.displayOrder)),
     db
       .select({ total: sql<number>`coalesce(sum(${deals.amountCents}), 0)`, count: sql<number>`count(*)` })
