@@ -132,37 +132,47 @@ export default async function InboxPage() {
     };
   });
 
-  /* One line above the panes: the title, the counts, the mailbox and when it
-     was last read, and the button. The messages are the page; the header is
-     a caption, and a caption does not get three rows. */
+  /* The header is the top bar of the same box as the panes, so the two line
+     up by construction: title, the counts as pills, the mailbox as a status
+     chip, and the button. The messages are the page; this is its frame. */
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h1 className="font-display text-xl font-bold tracking-[-0.035em]">
+    <div className="flex h-[calc(100vh-112px)] min-h-[480px] flex-col overflow-hidden rounded-[14px] border border-[rgba(21,24,28,0.08)] bg-white shadow-[0_1px_2px_rgba(21,24,28,0.04)] max-md:h-auto">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[var(--rule-soft)] bg-[linear-gradient(100deg,#faf6fe,#ffffff_60%)] px-5 py-3">
+        <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
           <span className="gradient-text-flow">Inbox</span>
         </h1>
-        <p className="min-w-0 flex-1 truncate text-xs text-[var(--text-tertiary)]">
-          {messages.length} messages · {inboundCount} received
+        <div className="flex items-center gap-1.5 text-xs font-medium">
+          <span className="rounded-full bg-[var(--tint-strong)] px-2.5 py-1 text-[var(--accent-primary)]">
+            {messages.length} {messages.length === 1 ? "message" : "messages"}
+          </span>
+          <span className="rounded-full bg-[color-mix(in_srgb,var(--accent-data)_18%,transparent)] px-2.5 py-1 text-[#4d7c0f]">
+            {inboundCount} received
+          </span>
+        </div>
+        <div className="ml-auto flex flex-wrap items-center gap-2.5">
           {refreshed.map((box) => (
-            <span key={box.id}>
-              {" · "}
-              {box.providerLabel} · {box.emailAddress}
-              {box.lastPolledAt ? ` · checked ${stamp.format(box.lastPolledAt)}` : ""}
-              {box.lastError && (
-                <span className="ml-2 font-medium text-[#b91c1c]">{box.lastError}</span>
-              )}
+            <span
+              key={box.id}
+              className="flex items-center gap-2 rounded-full border border-[var(--rule-soft)] bg-white px-3 py-1.5 text-xs text-[var(--text-tertiary)]"
+              title={box.lastError ?? `${box.providerLabel} is connected`}
+            >
+              <span className={`size-1.5 rounded-full ${box.lastError ? "bg-[#b91c1c]" : "bg-[#7cc00f]"}`} />
+              <span className="font-medium text-foreground">{box.providerLabel}</span>
+              <span>{box.emailAddress}</span>
+              {box.lastPolledAt && <span>· checked {stamp.format(box.lastPolledAt)}</span>}
+              {box.lastError && <span className="font-medium text-[#b91c1c]">· {box.lastError}</span>}
             </span>
           ))}
-        </p>
-        <form action={pollMailboxesNow}>
-          <button
-            type="submit"
-            className="flex h-8 items-center gap-1.5 rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-foreground hover:border-[#6b21a8]"
-          >
-            <RefreshCw className="size-3.5" />
-            <span>Check for replies</span>
-          </button>
-        </form>
+          <form action={pollMailboxesNow}>
+            <button
+              type="submit"
+              className="flex h-8 items-center gap-1.5 rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-foreground hover:border-[#6b21a8]"
+            >
+              <RefreshCw className="size-3.5" />
+              <span>Check for replies</span>
+            </button>
+          </form>
+        </div>
       </div>
 
       <InboxView items={items} from={from} />
