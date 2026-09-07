@@ -79,7 +79,7 @@ function MessageCard({ message }: { message: Message }) {
   );
 }
 
-export function ContactRecordModal({ contact, children, initialView = "activity", reply, triggerClassName, triggerLabel }: {
+export function ContactRecordModal({ contact, children, initialView = "activity", reply, triggerClassName, triggerLabel, defaultOpen = false }: {
   contact: ContactRecord;
   children: React.ReactNode;
   /** "compose" opens straight into the composer — the Email buttons and Inbox replies. */
@@ -87,8 +87,10 @@ export function ContactRecordModal({ contact, children, initialView = "activity"
   reply?: ReplyPrefill;
   triggerClassName?: string;
   triggerLabel?: string;
+  /** Open on arrival — a search result or a link that points at this person. */
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [view, setView] = useState<View>(initialView);
   const [data, setData] = useState<RecordData | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -14,7 +14,8 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Contacts" };
 
-export default async function ContactsPage() {
+export default async function ContactsPage({ searchParams }: { searchParams: Promise<{ open?: string }> }) {
+  const { open: openContactId } = await searchParams;
   const { workspaceId } = await requireTenant();
   const [rows, stageCounts, overdueAccounts, companyOptions] = await Promise.all([
     db
@@ -114,7 +115,7 @@ export default async function ContactsPage() {
             key={row.id}
             className={`transition-colors hover:bg-[var(--tint)] grid h-[46px] grid-cols-[220px_180px_minmax(0,1fr)_110px_60px_100px_100px_96px] items-center gap-3 px-4 text-[13px] ${i < rows.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
           >
-            <ContactRecordModal contact={row}>
+            <ContactRecordModal contact={row} defaultOpen={row.id === openContactId}>
               <Avatar name={`${row.firstName} ${row.lastName}`} />
               <span className="truncate font-medium text-foreground">
                 {row.firstName} {row.lastName}

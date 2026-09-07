@@ -1,10 +1,11 @@
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { initials } from "@/lib/format";
 import { SignOutButton } from "@/components/sign-out";
+import { GlobalSearch } from "@/components/global-search";
 
 /*
  * The shell's top strip. Quick-create rides in from the layout as a client
- * island; search stays furniture until command-K lands.
+ * island; search is one too, with command-K to reach it from anywhere.
  */
 export function Topbar({
   workspaceName,
@@ -22,10 +23,7 @@ export function Topbar({
         <ChevronDown className="size-3.5 text-[var(--text-tertiary)]" />
       </div>
       <div className="flex items-center gap-3">
-        <div className="flex h-8 w-[260px] items-center gap-2 rounded-[10px] border border-input bg-white px-3 text-[13px] text-[var(--text-tertiary)]">
-          <Search className="size-[15px]" />
-          <span>Search people, companies, deals</span>
-        </div>
+        <GlobalSearch />
         {quickCreate}
         <div
           title={userName}
