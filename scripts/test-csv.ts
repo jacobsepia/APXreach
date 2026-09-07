@@ -30,3 +30,9 @@ test("rows become contacts: full names split, bad emails drop the row, no name m
     { firstName: "Solo", lastName: "—", email: null, phone: null, company: null, title: null },
   ]);
 });
+
+test("writing a CSV round-trips through the reader", async () => {
+  const { toCsv } = await import("../src/lib/csv");
+  const text = toCsv(["Name", "Note"], [["Sepia, Joseph", 'said "hi"\nthen left'], ["Al", null]]);
+  assert.deepEqual(parseCsv(text), [["Name", "Note"], ["Sepia, Joseph", 'said "hi"\nthen left'], ["Al", ""]]);
+});

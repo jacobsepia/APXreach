@@ -9,6 +9,7 @@ import { RecordActions } from "@/components/record-actions";
 import { ComposeEmail } from "@/components/compose-email";
 import { ContactRecordModal } from "@/components/contact-record-modal";
 import { ImportContacts } from "@/components/import-contacts";
+import { Download } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,10 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <a href="/api/export/contacts" download className={chip.replace("text-muted-foreground", "text-foreground")}>
+            <Download className="size-3.5" />
+            <span>Export CSV</span>
+          </a>
           <ImportContacts className={chip.replace("text-muted-foreground", "text-foreground")} />
           <QuickCreate companies={companyOptions} stages={[]} only="contact" buttonLabel="Add contact" />
         </div>

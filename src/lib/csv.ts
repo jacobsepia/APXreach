@@ -106,3 +106,9 @@ export function rowsToContacts(rows: string[][], mapping: Partial<Record<Contact
   }
   return contacts;
 }
+
+/** The other direction: rows to a CSV file, every cell quoted so commas, quotes and line breaks survive. */
+export function toCsv(headers: string[], rows: Array<Array<string | number | null | undefined>>): string {
+  const cell = (value: string | number | null | undefined) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  return [headers.map(cell).join(","), ...rows.map((row) => row.map(cell).join(","))].join("\r\n") + "\r\n";
+}

@@ -4,6 +4,7 @@ import { companies, db, deals } from "@/db";
 import { requireTenant } from "@/lib/workspace";
 import { money } from "@/lib/format";
 import { Avatar, Card, LedgerDot, StagePill } from "@/components/ui";
+import { Download } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -33,13 +34,19 @@ export default async function CompaniesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
             <span className="gradient-text-flow">Companies</span>
           </h1>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">
-          {rows.length} companies · what they owe comes straight from the books
-        </p>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">
+            {rows.length} companies · what they owe comes straight from the books
+          </p>
+        </div>
+        <a href="/api/export/companies" download className="flex h-8 items-center gap-1.5 rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-foreground hover:border-[#6b21a8]">
+          <Download className="size-3.5" />
+          <span>Export CSV</span>
+        </a>
       </div>
 
       <Card index={0} className="overflow-hidden">

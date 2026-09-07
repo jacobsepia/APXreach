@@ -8,7 +8,7 @@ import { requireTenant } from "@/lib/workspace";
 import { RecordActions } from "@/components/record-actions";
 import { LinkInvoice } from "@/components/link-invoice";
 import Link from "next/link";
-import { AlertTriangle, Check, ChevronDown, FileText, Clock } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Download, FileText, Clock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -127,6 +127,10 @@ export default async function DealsPage({ searchParams }: { searchParams: Promis
               Table
             </Link>
           </div>
+          <a href="/api/export/deals" download className="flex h-8 items-center gap-1.5 rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-foreground hover:border-[#6b21a8]" title="Every deal, including lost ones, as a spreadsheet">
+            <Download className="size-3.5" />
+            <span>Export</span>
+          </a>
           <QuickCreate companies={companyOptions} stages={stageOptions} only="deal" buttonLabel="New deal" />
         </div>
       </div>
