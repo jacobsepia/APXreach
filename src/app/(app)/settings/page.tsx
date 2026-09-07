@@ -9,6 +9,8 @@ import { configuredMailboxProviders } from "@/lib/mailbox/providers";
 import { comingSoon, providers } from "@/lib/providers";
 import { Card, Caps, LedgerDot, Pill } from "@/components/ui";
 import { DisconnectButton, SyncNowButton } from "@/components/connect-books";
+import { TeamSettings } from "@/components/team-settings";
+import { pendingInvites, workspaceTeam } from "@/lib/team";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,12 @@ export default async function SettingsPage({
   searchParams: Promise<{ error?: string; connected?: string; mailbox?: string }>;
 }) {
   const { error, connected: justConnected, mailbox: justLinkedMailbox } = await searchParams;
-  const { workspaceId } = await requireTenant();
+  const { workspaceId, userId } = await requireTenant();
+  const [team, invites] = await Promise.all([workspaceTeam(workspaceId), pendingInvites(workspaceId)]);
+  const isOwner = team.some((member) => member.userId === userId && member.role === "owner");
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "apxreach.vercel.app";
+  const origin = `${requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")}://${host}`;
   const session = await auth.api.getSession({ headers: await headers() });
   const [connection] = await db.select().from(connections).where(eq(connections.workspaceId, workspaceId)).limit(1);
   /* A mailbox belongs to the person, so only theirs is shown or offered. */
@@ -56,6 +63,22 @@ export default async function SettingsPage({
           the connection on their side — nothing is copied by hand.
         </p>
       </div>
+
+      <Card className="px-[18px] py-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <Caps>Team</Caps>
+            <p className="mt-2 text-sm text-muted-foreground">{team.length === 1 ? "Just you so far." : `${team.length} people share this workspace.`} Everyone sees the same contacts, deals, books and inbox; each person connects their own mailbox.</p>
+          </div>
+        </div>
+        <TeamSettings
+          members={team.map((member) => ({ userId: member.userId, name: member.name, email: member.email, role: member.role, joinedAt: member.joinedAt.toISOString() }))}
+          invites={invites.map((invite) => ({ id: invite.id, email: invite.email, role: invite.role, token: invite.token, expiresAt: invite.expiresAt.toISOString(), invitedBy: invite.invitedBy, status: invite.status }))}
+          currentUserId={userId}
+          isOwner={isOwner}
+          origin={origin}
+        />
+      </Card>
 
       <Card className="px-[18px] py-4"><div className="flex items-center justify-between gap-4"><div><Caps>Email templates</Caps><p className="mt-2 text-sm text-muted-foreground">Personal greetings, follow-ups, and invoice reminders. Edit your ten workspace templates and their personalization tags.</p></div><Link href="/settings/templates" className="shrink-0 rounded-lg border border-input bg-white px-3 py-2 text-xs font-medium">Manage templates →</Link></div></Card>
 

@@ -1,8 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { signUp } from "@/lib/auth-client";
+import { safeAuthDestination } from "@/lib/auth-redirect";
 import { ApxSignIn, OrDivider } from "@/components/apx-sign-in";
 
 const field =
@@ -11,6 +12,9 @@ const label = "text-[11px] font-semibold tracking-[0.06em] uppercase text-[#6f78
 
 export function SignUpForm({ ledgerReady }: { ledgerReady: boolean }) {
   const router = useRouter();
+  const params = useSearchParams();
+  /* An invitation link brought them here; go back to it once the account exists. */
+  const destination = params.get("to") ? safeAuthDestination(params.get("to")) : "/welcome";
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -30,7 +34,7 @@ export function SignUpForm({ ledgerReady }: { ledgerReady: boolean }) {
       setError(result.error.message ?? "That didn't work.");
       return;
     }
-    router.push("/welcome");
+    router.push(destination);
     router.refresh();
     } catch {
       setError("Could not reach Reach. Please try again.");

@@ -5,6 +5,8 @@ import { auth } from "@/lib/auth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Topbar } from "@/components/topbar";
 import { QuickCreate } from "@/components/quick-create";
+import { WorkspaceProvider } from "@/components/workspace-context";
+import { memberNames } from "@/lib/team";
 import { Ticker, type TickerItem } from "@/components/ticker";
 import { money } from "@/lib/format";
 import {
@@ -164,7 +166,10 @@ export default async function AppLayout({
     { label: "Companies", value: String(companyOptions.length), href: "/companies" },
   ];
 
+  const members = await memberNames(workspace.id);
+
   return (
+    <WorkspaceProvider members={members} currentUser={session.user.name}>
     <div className="flex min-h-screen w-full">
       <AppSidebar
         connectionLabel={connected ? `${connection.providerLabel} connected` : null}
@@ -180,5 +185,6 @@ export default async function AppLayout({
         <main className="flex-1 px-8 py-7">{children}</main>
       </div>
     </div>
+    </WorkspaceProvider>
   );
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { ledgerSignInReady } from "@/lib/auth";
 import { SignUpForm } from "./sign-up-form";
 
@@ -21,7 +22,9 @@ export default function SignUpPage() {
           </p>
         </div>
         <div className="accent-rail relative overflow-hidden rounded-2xl border border-border bg-white p-6 shadow-[var(--edge-top)]">
-          <SignUpForm ledgerReady={ledgerSignInReady} />
+          <Suspense>
+            <SignUpForm ledgerReady={ledgerSignInReady} />
+          </Suspense>
         </div>
         <p className="mt-4 text-center text-[13px] text-muted-foreground">
           Already in?{" "}

@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import { hasWorkspace } from "@/lib/workspace";
 import { createWorkspace } from "@/lib/actions";
 import { CreateWorkspaceButton } from "@/components/create-workspace-button";
+import { invitesForEmail } from "@/lib/team";
+import { acceptInviteAction } from "@/lib/team-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +28,9 @@ export default async function WelcomePage({
   if (await hasWorkspace(session.user.id)) redirect("/dashboard");
 
   const firstName = session.user.name?.split(/\s+/)[0] ?? "there";
+  /* Somebody may already be waiting for them: an invitation to their address
+     comes first, so a colleague does not create a second workspace by mistake. */
+  const invites = await invitesForEmail(session.user.email);
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
@@ -36,13 +41,28 @@ export default async function WelcomePage({
             <span className="text-[var(--accent-primary)]">Reach</span>
           </div>
           <h1 className="mt-3 font-display text-[26px] font-bold tracking-[-0.03em] text-foreground">
-            Welcome, {firstName}. What&apos;s the{" "}
-            <span className="gradient-text-flow">company</span>?
+            {invites.length ? <>Welcome, {firstName}. You&apos;ve been <span className="gradient-text-flow">invited</span>.</> : <>Welcome, {firstName}. What&apos;s the{" "}<span className="gradient-text-flow">company</span>?</>}
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Your contacts, deals and books all live inside it. Nobody else can see it.
+            {invites.length ? "Join the workspace below, or start one of your own." : "Your contacts, deals and books all live inside it. Nobody else can see it."}
           </p>
         </div>
+        {invites.length > 0 && (
+          <div className="mb-4 flex flex-col gap-2">
+            {invites.map((invite) => (
+              <form key={invite.id} action={acceptInviteAction} className="accent-rail relative flex items-center justify-between gap-3 overflow-hidden rounded-2xl border border-border bg-white px-5 py-4 shadow-[var(--edge-top)]">
+                <input type="hidden" name="token" value={invite.token} />
+                <div className="min-w-0">
+                  <div className="truncate font-display text-[15px] font-semibold text-foreground">{invite.workspaceName}</div>
+                  <div className="truncate text-xs text-muted-foreground">{invite.invitedBy ? `Invited by ${invite.invitedBy}` : "Invited"} · as {invite.role === "owner" ? "an owner" : "a member"}</div>
+                </div>
+                <button type="submit" className="flex h-9 shrink-0 items-center rounded-[10px] bg-[image:var(--gradient-cta)] px-4 text-[13px] font-medium text-white">Join</button>
+              </form>
+            ))}
+            {error && <p className="text-xs font-medium text-[#b91c1c]">{error}</p>}
+            <p className="text-center text-xs text-[var(--text-tertiary)]">Or start a separate workspace:</p>
+          </div>
+        )}
         <div className="accent-rail relative overflow-hidden rounded-2xl border border-border bg-white p-6 shadow-[var(--edge-top)]">
           <form action={createWorkspace} className="flex flex-col gap-3.5">
             <div className="flex flex-col gap-1">
@@ -58,7 +78,7 @@ export default async function WelcomePage({
                 className="h-10 w-full rounded-[10px] border border-[rgba(21,24,28,0.14)] bg-white px-3 text-sm text-[#15181c] outline-none focus:border-[#6b21a8]"
               />
             </div>
-            {error && <p className="text-xs font-medium text-[#b91c1c]">{error}</p>}
+            {error && !invites.length && <p className="text-xs font-medium text-[#b91c1c]">{error}</p>}
             <CreateWorkspaceButton />
           </form>
         </div>

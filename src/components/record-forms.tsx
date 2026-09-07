@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
+import { useWorkspace } from "./workspace-context";
 
 /*
  * The field sets every record dialog is built from, in one place because
@@ -72,13 +73,18 @@ export function Submit({ children }: { children: React.ReactNode }) {
   );
 }
 
-const OWNERS = ["Jacob S.", "Joseph S."];
-
-/** Whoever already owns the record stays an option, even off the roster. */
+/**
+ * The people on the team, from the workspace. Whoever already owns the
+ * record stays an option even if they have since left, and a new record
+ * defaults to the person filling in the form.
+ */
 function OwnerSelect({ value }: { value?: string | null }) {
-  const options = value && !OWNERS.includes(value) ? [value, ...OWNERS] : OWNERS;
+  const { members, currentUser } = useWorkspace();
+  const roster = members.length ? members : [currentUser].filter(Boolean);
+  const options = value && !roster.includes(value) ? [value, ...roster] : roster;
   return (
-    <select name="ownerName" defaultValue={value ?? OWNERS[0]} className={field}>
+    <select name="ownerName" defaultValue={value ?? (roster.includes(currentUser) ? currentUser : roster[0] ?? "")} className={field}>
+      {options.length === 0 && <option value="">Unassigned</option>}
       {options.map((name) => (
         <option key={name}>{name}</option>
       ))}

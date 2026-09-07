@@ -353,3 +353,22 @@ export const tickets = pgTable("tickets", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+/*
+ * Invitations. An owner invites an address; whoever signs in with that
+ * address and opens the link becomes a member. The token is the whole
+ * secret, so it is long, single-use, and expires.
+ */
+export const workspaceInvites = pgTable("workspace_invites", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
+  email: text("email").notNull(),
+  role: text("role").default("member").notNull(), // owner | member
+  token: text("token").notNull().unique(),
+  invitedBy: text("invited_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  acceptedBy: text("accepted_by"),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+});
