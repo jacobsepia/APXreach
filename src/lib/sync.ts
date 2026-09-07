@@ -1,5 +1,5 @@
-import { and, eq } from "drizzle-orm";
-import { activities, companies, connections, contacts, db, syncedInvoices } from "@/db";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { activities, companies, connections, contacts, db, deals, syncedInvoices } from "@/db";
 import { getProvider, type AccountingProvider, type OAuthTokens } from "@/lib/providers";
 import { clientCredentials, refreshTokens } from "@/lib/oauth";
 
@@ -359,11 +359,52 @@ export async function runSync(workspaceId: string): Promise<void> {
       .where(eq(companies.id, companyId));
   }
 
+  // ── The hand-off. Ledger's API is read-only, so a won deal cannot create
+  //    its invoice from here; instead the invoice that was raised for it is
+  //    recognised when it appears: same company, same amount, issued on or
+  //    after the day the deal was won. Linked once, and never re-guessed.
+  let invoicesMatched = 0;
+  const unlinkedWon = await db
+    .select({ id: deals.id, name: deals.name, companyId: deals.companyId, amountCents: deals.amountCents, wonAt: deals.wonAt })
+    .from(deals)
+    .where(and(eq(deals.workspaceId, workspaceId), eq(deals.status, "won"), isNull(deals.ledgerInvoiceNumber)));
+  if (unlinkedWon.length) {
+    const linked = new Set(
+      (await db.select({ number: deals.ledgerInvoiceNumber }).from(deals).where(and(eq(deals.workspaceId, workspaceId), isNotNull(deals.ledgerInvoiceNumber))))
+        .map((row) => row.number),
+    );
+    for (const deal of unlinkedWon) {
+      if (!deal.companyId || !deal.wonAt || deal.amountCents <= 0) continue;
+      const wonDay = new Date(deal.wonAt.getTime() - 86_400_000).toISOString().slice(0, 10);
+      const match = invoices.find(
+        (inv) =>
+          companyIdByExternal.get(inv.contactExternalId) === deal.companyId &&
+          inv.totalCents === deal.amountCents &&
+          inv.issueDate >= wonDay &&
+          !linked.has(inv.number),
+      );
+      if (!match) continue;
+      linked.add(match.number);
+      await db.update(deals).set({ ledgerInvoiceNumber: match.number, updatedAt: new Date() }).where(eq(deals.id, deal.id));
+      await db.insert(activities).values({
+        workspaceId,
+        type: "ledger_event",
+        source: "ledger",
+        subject: `Invoice ${match.number} raised for "${deal.name}"`,
+        body: `${connection.providerLabel} shows invoice ${match.number} for the same amount, issued after the deal was won. Linked automatically.`,
+        companyId: deal.companyId,
+        dealId: deal.id,
+      });
+      invoicesMatched++;
+    }
+  }
+
   const summary =
     `${pulledContacts.length - suppliersSkipped} customers read ` +
     `(${companiesCreated} new companies, ${peopleCreated} new people` +
     `${suppliersSkipped ? `, ${suppliersSkipped} suppliers skipped` : ""}), ` +
-    `${invoicesMirrored} open invoices mirrored.`;
+    `${invoicesMirrored} open invoices mirrored` +
+    `${invoicesMatched ? `, ${invoicesMatched} ${invoicesMatched === 1 ? "invoice" : "invoices"} linked to won deals` : ""}.`;
   await db
     .update(connections)
     .set({ lastSyncAt: new Date(), lastSyncSummary: summary, lastSyncError: null })

@@ -262,6 +262,7 @@ export type DealValues = {
   closeDate?: string | null;
   stageId?: string;
   ownerName?: string | null;
+  lostReason?: string | null;
 };
 
 export function DealFields({
@@ -318,6 +319,17 @@ export function DealFields({
           <OwnerSelect value={values.ownerName} />
         </Field>
       </Row>
+      {stages.some((s) => /lost/i.test(s.name)) && (
+        <Field name="Reason lost (only kept when the stage is Closed lost)">
+          <input
+            name="lostReason"
+            defaultValue={values.lostReason ?? ""}
+            placeholder="Price, timing, went with someone else…"
+            maxLength={300}
+            className={field}
+          />
+        </Field>
+      )}
     </>
   );
 }

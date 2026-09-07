@@ -347,6 +347,8 @@ export async function updateDeal(formData: FormData): Promise<void> {
       status: stage.kind === "won" ? "won" : stage.kind === "lost" ? "lost" : "open",
       /* Editing a deal that was already won must not restamp the day it was won. */
       wonAt: stage.kind === "won" ? (existing.wonAt ?? new Date()) : null,
+      /* A reason is only meaningful on a lost deal; anywhere else it is cleared. */
+      lostReason: stage.kind === "lost" ? optionalText.parse(formData.get("lostReason") ?? "") : null,
       updatedAt: new Date(),
     })
     .where(and(eq(deals.id, id), eq(deals.workspaceId, wsId)));
@@ -354,6 +356,37 @@ export async function updateDeal(formData: FormData): Promise<void> {
   revalidatePath("/deals");
   revalidatePath("/dashboard");
   if (companyId) revalidatePath(`/companies/${companyId}`);
+}
+
+/**
+ * The hand-off by hand: point a won deal at the invoice the books raised for
+ * it. The sync links these on its own when company, amount and timing agree;
+ * this is for the ones it could not be sure about.
+ */
+export async function linkDealInvoice(formData: FormData): Promise<void> {
+  const wsId = await workspaceId();
+  const id = z.uuid().parse(formData.get("dealId"));
+  const invoiceNumber = optionalText.parse(formData.get("invoiceNumber") ?? "");
+  const [deal] = await db.select({ id: deals.id, name: deals.name, companyId: deals.companyId, status: deals.status })
+    .from(deals).where(and(eq(deals.id, id), eq(deals.workspaceId, wsId))).limit(1);
+  if (!deal) throw new Error("Deal unavailable.");
+  if (invoiceNumber) {
+    const [invoice] = await db.select({ companyId: syncedInvoices.companyId }).from(syncedInvoices)
+      .where(and(eq(syncedInvoices.workspaceId, wsId), eq(syncedInvoices.number, invoiceNumber))).limit(1);
+    if (!invoice) throw new Error(`Invoice ${invoiceNumber} is not in the synced books.`);
+    if (deal.companyId && invoice.companyId !== deal.companyId) throw new Error(`Invoice ${invoiceNumber} belongs to a different company.`);
+  }
+  await db.update(deals).set({ ledgerInvoiceNumber: invoiceNumber, updatedAt: new Date() }).where(eq(deals.id, deal.id));
+  if (invoiceNumber) {
+    await db.insert(activities).values({
+      workspaceId: wsId, type: "ledger_event", source: "ledger",
+      subject: `Invoice ${invoiceNumber} linked to "${deal.name}"`,
+      body: `Linked by ${await actorName()}.`,
+      companyId: deal.companyId, dealId: deal.id,
+    });
+  }
+  revalidatePath("/deals");
+  if (deal.companyId) revalidatePath(`/companies/${deal.companyId}`);
 }
 
 export async function deleteDeal(formData: FormData): Promise<void> {

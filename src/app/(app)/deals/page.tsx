@@ -6,13 +6,17 @@ import { QuickCreate } from "@/components/quick-create";
 import { StageSelect } from "@/components/stage-select";
 import { requireTenant } from "@/lib/workspace";
 import { RecordActions } from "@/components/record-actions";
+import { LinkInvoice } from "@/components/link-invoice";
+import Link from "next/link";
 import { AlertTriangle, Check, ChevronDown, FileText, Clock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Deals" };
 
-export default async function DealsPage() {
+export default async function DealsPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  const { view } = await searchParams;
+  const table = view === "table";
   const { workspaceId } = await requireTenant();
   const [pipeline] = await db
     .select()
@@ -42,16 +46,19 @@ export default async function DealsPage() {
         updatedAt: deals.updatedAt,
         ownerName: deals.ownerName,
         ledgerInvoiceNumber: deals.ledgerInvoiceNumber,
+        lostReason: deals.lostReason,
+        stageName: pipelineStages.name,
         companyId: deals.companyId,
         companyName: companies.name,
         companyOverdueCents: companies.overdueCents,
       })
       .from(deals)
       .leftJoin(companies, eq(deals.companyId, companies.id))
-      .where(and(inArray(deals.status, ["open", "won"]), eq(deals.workspaceId, workspaceId)))
+      .innerJoin(pipelineStages, eq(deals.stageId, pipelineStages.id))
+      .where(and(inArray(deals.status, ["open", "won", "lost"]), eq(deals.workspaceId, workspaceId)))
       .orderBy(asc(deals.closeDate)),
     db
-      .select({ number: syncedInvoices.number })
+      .select({ number: syncedInvoices.number, companyId: syncedInvoices.companyId, totalCents: syncedInvoices.totalCents, outstandingCents: syncedInvoices.outstandingCents, dueDate: syncedInvoices.dueDate })
       .from(syncedInvoices)
       .where(and(ne(syncedInvoices.status, "paid"), eq(syncedInvoices.workspaceId, workspaceId))),
     db
@@ -71,10 +78,15 @@ export default async function DealsPage() {
   const allStageOptions = stages.map((s) => ({ id: s.id, name: s.name }));
 
   const stillOpen = new Set(openLedgerInvoices.map((r) => r.number));
+  const alreadyLinked = new Set(rows.map((d) => d.ledgerInvoiceNumber).filter(Boolean));
+  const invoicesFor = (companyId: string | null) =>
+    openLedgerInvoices
+      .filter((inv) => inv.companyId === companyId && !alreadyLinked.has(inv.number))
+      .map((inv) => ({ number: inv.number, label: `${inv.number} · ${money(inv.totalCents)} · due ${shortDate(inv.dueDate)}` }));
   const columns = stages
     .filter((s) => s.kind !== "lost")
     .map((stage) => {
-      const stageDeals = rows.filter((d) => d.stageId === stage.id);
+      const stageDeals = rows.filter((d) => d.stageId === stage.id && d.status !== "lost");
       return {
         stage,
         deals: stageDeals,
@@ -108,17 +120,44 @@ export default async function DealsPage() {
             <ChevronDown className="size-3.5 text-[var(--text-tertiary)]" />
           </div>
           <div className="flex h-8 overflow-hidden rounded-[10px] border border-border bg-white text-[13px] font-medium">
-            <span className="flex items-center bg-[var(--tint-strong)] px-3.5 text-foreground">
+            <Link href="/deals" className={`flex items-center px-3.5 ${table ? "text-muted-foreground hover:text-foreground" : "bg-[var(--tint-strong)] text-foreground"}`}>
               Board
-            </span>
-            <span className="flex items-center border-l border-border px-3.5 text-muted-foreground">
+            </Link>
+            <Link href="/deals?view=table" className={`flex items-center border-l border-border px-3.5 ${table ? "bg-[var(--tint-strong)] text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
               Table
-            </span>
+            </Link>
           </div>
           <QuickCreate companies={companyOptions} stages={stageOptions} only="deal" buttonLabel="New deal" />
         </div>
       </div>
 
+      {table ? (
+        <Card index={0} className="overflow-hidden">
+          <div className="grid h-10 grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_130px_110px_100px_90px_minmax(0,1fr)_40px] items-center gap-3 border-b border-border bg-[image:var(--gradient-table-head)] px-4 text-[11px] font-semibold tracking-[0.05em] text-[var(--text-tertiary)] uppercase">
+            <span>Deal</span><span>Company</span><span>Stage</span><span className="text-right">Amount</span><span>Close</span><span>Owner</span><span>Books / reason</span><span className="sr-only">Actions</span>
+          </div>
+          {rows.map((d, i) => (
+            <div key={d.id} className={`grid grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_130px_110px_100px_90px_minmax(0,1fr)_40px] items-center gap-3 px-4 py-2.5 text-[13px] transition-colors hover:bg-[var(--tint)] ${i < rows.length - 1 ? "border-b border-[var(--rule-soft)]" : ""} ${d.status === "lost" ? "opacity-70" : ""}`}>
+              <span className="truncate font-medium text-foreground">{d.name}</span>
+              <span className="truncate text-muted-foreground">{d.companyId ? <Link href={`/companies/${d.companyId}`} className="hover:text-foreground">{d.companyName}</Link> : "—"}</span>
+              <span className="truncate text-muted-foreground">{d.stageName}</span>
+              <span className="text-right font-semibold text-foreground">{money(d.amountCents)}</span>
+              <span className="text-[var(--text-tertiary)]">{d.status === "won" ? `Won ${shortDate(d.wonAt ?? undefined)}` : shortDate(d.closeDate)}</span>
+              <span className="truncate text-[var(--text-tertiary)]">{d.ownerName ?? "—"}</span>
+              <span className="min-w-0 truncate text-xs text-[var(--text-tertiary)]">
+                {d.status === "won" && d.ledgerInvoiceNumber && (stillOpen.has(d.ledgerInvoiceNumber) ? `Invoice ${d.ledgerInvoiceNumber} sent` : `Invoice ${d.ledgerInvoiceNumber} paid`)}
+                {d.status === "won" && !d.ledgerInvoiceNumber && <LinkInvoice dealId={d.id} invoices={invoicesFor(d.companyId)} />}
+                {d.status === "lost" && (d.lostReason ? `Lost · ${d.lostReason}` : "Lost")}
+                {d.status === "open" && Number(d.companyOverdueCents ?? 0) > 0 && <span className="text-[#b91c1c]">{money(Number(d.companyOverdueCents))} overdue in the books</span>}
+              </span>
+              <span className="flex justify-end">
+                <RecordActions kind="deal" id={d.id} name={d.name} companies={companyOptions} stages={allStageOptions} values={{ name: d.name, companyId: d.companyId, amount: (d.amountCents / 100).toString(), closeDate: d.closeDate, stageId: d.stageId, ownerName: d.ownerName, lostReason: d.lostReason }} />
+              </span>
+            </div>
+          ))}
+          {rows.length === 0 && <p className="px-4 py-6 text-sm text-muted-foreground">No deals yet.</p>}
+        </Card>
+      ) : (
       <div className="grid grid-cols-4 items-start gap-3.5">
         {columns.map(({ stage, deals: stageDeals, total }) => (
           <div key={stage.id} className="flex flex-col gap-2.5">
@@ -160,6 +199,9 @@ export default async function DealsPage() {
                       <AlertTriangle className="size-[11px]" />
                       <span>{money(Number(d.companyOverdueCents))} overdue in the books</span>
                     </Pill>
+                  )}
+                  {d.status === "won" && !d.ledgerInvoiceNumber && (
+                    <LinkInvoice dealId={d.id} invoices={invoicesFor(d.companyId)} />
                   )}
                   {d.status === "won" && d.ledgerInvoiceNumber && (
                     <Pill kind="ledger" className="self-start">
@@ -204,6 +246,7 @@ export default async function DealsPage() {
                           closeDate: d.closeDate,
                           stageId: d.stageId,
                           ownerName: d.ownerName,
+                          lostReason: d.lostReason,
                         }}
                       />
                     </span>
@@ -217,6 +260,7 @@ export default async function DealsPage() {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }
