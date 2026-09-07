@@ -11,6 +11,8 @@ import { Card, Caps, LedgerDot, Pill } from "@/components/ui";
 import { DisconnectButton, SyncNowButton } from "@/components/connect-books";
 import { TeamSettings } from "@/components/team-settings";
 import { pendingInvites, workspaceTeam } from "@/lib/team";
+import { sendDigestNow, setDigestEnabled } from "@/lib/digest/actions";
+import { workspaceMembers } from "@/db";
 
 export const dynamic = "force-dynamic";
 
@@ -26,12 +28,14 @@ const stamp = new Intl.DateTimeFormat("en-CA", {
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; connected?: string; mailbox?: string }>;
+  searchParams: Promise<{ error?: string; connected?: string; mailbox?: string; digest?: string }>;
 }) {
-  const { error, connected: justConnected, mailbox: justLinkedMailbox } = await searchParams;
+  const { error, connected: justConnected, mailbox: justLinkedMailbox, digest: digestSent } = await searchParams;
   const { workspaceId, userId } = await requireTenant();
   const [team, invites] = await Promise.all([workspaceTeam(workspaceId), pendingInvites(workspaceId)]);
   const isOwner = team.some((member) => member.userId === userId && member.role === "owner");
+  const [myMembership] = await db.select({ digestEnabled: workspaceMembers.digestEnabled, digestLastSentAt: workspaceMembers.digestLastSentAt }).from(workspaceMembers)
+    .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId))).limit(1);
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "apxreach.vercel.app";
   const origin = `${requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")}://${host}`;
@@ -194,6 +198,25 @@ export default async function SettingsPage({
           inbox you already watch and the thread reads normally to them. A mailbox is
           yours alone — a colleague connects their own and sends as themselves.
         </p>
+        {digestSent && (
+          <p className="mt-2 rounded-[10px] bg-[color-mix(in_srgb,var(--accent-data)_18%,transparent)] px-3 py-2 text-xs text-[#3f6212]">{digestSent}</p>
+        )}
+        {myMailboxes.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--rule-soft)] bg-[#fdfbff] px-3.5 py-2.5">
+            <form action={setDigestEnabled} className="flex items-center gap-2 text-[13px] text-foreground">
+              <input type="checkbox" name="enabled" defaultChecked={myMembership?.digestEnabled ?? true} className="size-4 accent-[#6b21a8]" id="digest-enabled" />
+              <label htmlFor="digest-enabled">Morning digest to {myMailboxes[0].emailAddress}</label>
+              <button type="submit" className="ml-1 rounded-[8px] border border-input bg-white px-2 py-0.5 text-xs font-medium">Save</button>
+              <span className="text-xs text-[var(--text-tertiary)]">
+                Tasks due, overnight replies, tickets on the clock, overdue accounts, and what the sequences did. Weekday mornings around 10 Eastern; a quiet day sends nothing.
+                {myMembership?.digestLastSentAt ? ` Last sent ${stamp.format(myMembership.digestLastSentAt)}.` : ""}
+              </span>
+            </form>
+            <form action={sendDigestNow}>
+              <button type="submit" className="h-8 rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-foreground hover:border-[#6b21a8]">Send me today&apos;s</button>
+            </form>
+          </div>
+        )}
 
         {myMailboxes.map((box) => (
           <div

@@ -42,6 +42,9 @@ export const workspaceMembers = pgTable("workspace_members", {
   userId: text("user_id").references(() => user.id, { onDelete: "cascade" }).notNull(),
   role: text("role").default("owner").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  /** The morning email: what needs doing today, sent from their own mailbox to themselves. */
+  digestEnabled: boolean("digest_enabled").default(true).notNull(),
+  digestLastSentAt: timestamp("digest_last_sent_at", { withTimezone: true }),
 }, (table) => [uniqueIndex("workspace_members_user_workspace_idx").on(table.userId, table.workspaceId)]);
 
 // Starter templates are code defaults; workspace edits override them without
