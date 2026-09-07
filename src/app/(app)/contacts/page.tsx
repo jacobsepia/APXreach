@@ -9,6 +9,7 @@ import { RecordActions } from "@/components/record-actions";
 import { ComposeEmail } from "@/components/compose-email";
 import { ContactRecordModal } from "@/components/contact-record-modal";
 import { ImportContacts } from "@/components/import-contacts";
+import { duplicateCompanies, duplicateContacts } from "@/lib/duplicates";
 import { Download } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export const metadata = { title: "Contacts" };
 export default async function ContactsPage({ searchParams }: { searchParams: Promise<{ open?: string }> }) {
   const { open: openContactId } = await searchParams;
   const { workspaceId } = await requireTenant();
-  const [rows, stageCounts, overdueAccounts, companyOptions] = await Promise.all([
+  const [rows, stageCounts, overdueAccounts, companyOptions, dupPeople, dupFirms] = await Promise.all([
     db
       .select({
         id: contacts.id,
@@ -54,7 +55,10 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
       .from(companies)
       .where(eq(companies.workspaceId, workspaceId))
       .orderBy(companies.name),
+    duplicateContacts(workspaceId),
+    duplicateCompanies(workspaceId),
   ]);
+  const duplicateGroups = dupPeople.length + dupFirms.length;
 
   const countOf = (stage: string) =>
     Number(stageCounts.find((s) => s.stage === stage)?.count ?? 0);
@@ -102,6 +106,11 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
         <span className={`${chip} border-[color-mix(in_srgb,var(--accent-warning)_35%,transparent)] text-[#b45309]`}>
           Overdue accounts <span>{overdueCount}</span>
         </span>
+        {duplicateGroups > 0 && (
+          <Link href="/contacts/duplicates" className={`${chip} ml-auto border-[color-mix(in_srgb,var(--accent-hot)_35%,transparent)] text-[#b91c1c] hover:bg-white`}>
+            {duplicateGroups} possible {duplicateGroups === 1 ? "duplicate" : "duplicates"} · review
+          </Link>
+        )}
       </div>
 
       <Card index={0} className="overflow-hidden">
