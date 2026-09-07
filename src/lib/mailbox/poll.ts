@@ -2,6 +2,7 @@ import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { activities, contacts, db, emailMessages, mailboxes } from "@/db";
 import { getMailboxProvider } from "@/lib/mailbox/providers";
 import { accessTokenFor } from "@/lib/mailbox/send";
+import { threadKeyFor } from "./thread";
 
 /*
  * The reply poll: what turns a send button into a CRM.
@@ -130,6 +131,7 @@ export async function pollMailbox(mailbox: MailboxRow): Promise<PollOutcome> {
       bodyText: text,
       bodyHtml,
       providerMessageId: message.providerMessageId,
+      threadKey: threadKeyFor(message.subject, contact.id, message.fromAddress),
       sentAt: message.receivedAt,
     });
 

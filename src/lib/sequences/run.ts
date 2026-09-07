@@ -4,6 +4,7 @@ import { prepareEmailBody, sanitizeEmailHtml } from "@/lib/email-content";
 import { renderEmailTemplate } from "@/lib/email-templates";
 import { contactTemplateContext, workspaceTemplates } from "@/lib/email-template-store";
 import { sendFromMailbox } from "@/lib/mailbox/send";
+import { threadKeyFor } from "@/lib/mailbox/thread";
 import { runSync } from "@/lib/sync";
 import { dueAt, stopReason } from "./plan";
 
@@ -175,6 +176,7 @@ export async function runEnrollment(enrollment: Enrollment, now = new Date()): P
     bodyText: body.text,
     bodyHtml: body.html ?? null,
     providerMessageId: sent.value.providerMessageId,
+    threadKey: threadKeyFor(rendered.subject, contact.id, contact.email),
     sentAt: now,
   });
   await db.insert(activities).values({

@@ -16,6 +16,7 @@
 .rowSubject { font-size:12.5px; color:#2b2433; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .rowSnippet { font-size:12px; color:var(--text-tertiary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .rowSide { display:flex; flex-direction:column; align-items:flex-end; gap:4px; font-size:11px; color:var(--text-tertiary); white-space:nowrap; }
+.count { display:inline-block; margin-left:6px; padding:0 5px; border-radius:8px; background:var(--tint-strong); color:var(--accent-primary); font-size:10px; font-weight:700; vertical-align:1px; }
 .rowClip { width:12px; height:12px; }
 .listEmpty { padding:24px 18px; font-size:13px; line-height:1.6; color:var(--text-tertiary); }
 
@@ -33,17 +34,23 @@
 .companyLink:hover { color:#15181c; text-decoration-color:currentColor; }
 .paneActions { display:flex; flex-shrink:0; align-items:center; gap:8px; }
 
-.meta { display:grid; grid-template-columns:auto minmax(0,1fr); gap:3px 12px; margin:16px 0 0; padding:12px 0; border-top:1px solid var(--rule-soft); border-bottom:1px solid var(--rule-soft); font-size:12px; }
-.meta dt { color:var(--text-tertiary); }
-.meta dd { margin:0; color:#2b2433; overflow-wrap:anywhere; }
-
-.chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+.chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
 .chip { display:inline-flex; align-items:center; gap:5px; height:24px; max-width:300px; padding:0 9px; border:1px solid #e3d6ee; border-radius:999px; background:#faf6fe; color:#5d3f6f; font-size:11.5px; }
 .chip > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .chip small { flex-shrink:0; color:#a78cb8; font-size:10px; }
 .chipIcon { width:11px; height:11px; flex-shrink:0; }
 
-.body { margin-top:16px; font-size:14px; line-height:1.7; color:#302b36; }
+/* The conversation: one block per message, oldest first, the way it happened. */
+.thread { display:flex; flex-direction:column; }
+.message, .messageLast { padding:16px 0; border-bottom:1px solid var(--rule-soft); }
+.messageLast { border-bottom:0; padding-bottom:8px; }
+.messageHead { display:flex; align-items:flex-start; gap:10px; }
+.messageWho { display:flex; min-width:0; flex:1; flex-direction:column; font-size:12.5px; }
+.messageWho strong { font-weight:600; color:#15181c; }
+.messageWho span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-tertiary); font-size:11.5px; }
+.messageWhen { display:flex; flex-shrink:0; align-items:center; gap:8px; font-size:11.5px; color:var(--text-tertiary); }
+
+.body { margin-top:12px; font-size:14px; line-height:1.7; color:#302b36; }
 .plain { white-space:pre-wrap; overflow-wrap:anywhere; }
 .rich p { margin:0 0 .7em; }
 .rich p:last-child { margin-bottom:0; }

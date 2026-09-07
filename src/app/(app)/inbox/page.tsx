@@ -74,6 +74,7 @@ export default async function InboxPage() {
       fromAddress: emailMessages.fromAddress,
       toAddress: emailMessages.toAddress,
       subject: emailMessages.subject,
+      threadKey: emailMessages.threadKey,
       bodyText: emailMessages.bodyText,
       bodyHtml: emailMessages.bodyHtml,
       attachments: emailMessages.attachments,
@@ -90,7 +91,7 @@ export default async function InboxPage() {
     .leftJoin(companies, eq(emailMessages.companyId, companies.id))
     .where(eq(emailMessages.workspaceId, workspaceId))
     .orderBy(desc(emailMessages.sentAt))
-    .limit(100);
+    .limit(300);
 
   const inboundCount = messages.filter((m) => m.direction === "inbound").length;
 
@@ -140,8 +141,21 @@ export default async function InboxPage() {
       companyId: m.companyId,
       companyName: m.companyName,
       ticketId: ticketByMessage.get(m.id) ?? null,
+      threadKey: m.threadKey ?? m.id,
     };
   });
+
+  /* One row per conversation, newest first; the pane reads the whole of it. */
+  const byThread = new Map<string, InboxItem[]>();
+  for (const item of items) {
+    const list = byThread.get(item.threadKey) ?? [];
+    list.push(item);
+    byThread.set(item.threadKey, list);
+  }
+  const threads = [...byThread.entries()]
+    .map(([key, messages]) => ({ key, messages: [...messages].sort((a, b) => a.sentAt.localeCompare(b.sentAt)) }))
+    .sort((a, b) => b.messages[b.messages.length - 1].sentAt.localeCompare(a.messages[a.messages.length - 1].sentAt))
+    .slice(0, 100);
 
   /* The header is the top bar of the same box as the panes, so the two line
      up by construction: title, the counts as pills, the mailbox as a status
@@ -154,7 +168,7 @@ export default async function InboxPage() {
         </h1>
         <div className="flex items-center gap-1.5 text-xs font-medium">
           <span className="rounded-full bg-[var(--tint-strong)] px-2.5 py-1 text-[var(--accent-primary)]">
-            {messages.length} {messages.length === 1 ? "message" : "messages"}
+            {threads.length} {threads.length === 1 ? "conversation" : "conversations"}
           </span>
           <span className="rounded-full bg-[color-mix(in_srgb,var(--accent-data)_18%,transparent)] px-2.5 py-1 text-[#4d7c0f]">
             {inboundCount} received
@@ -186,7 +200,7 @@ export default async function InboxPage() {
         </div>
       </div>
 
-      <InboxView items={items} />
+      <InboxView threads={threads} />
     </div>
   );
 }

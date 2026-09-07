@@ -26,6 +26,7 @@ import { getProvider } from "@/lib/providers";
 import { getMailboxProvider } from "@/lib/mailbox/providers";
 import { sendFromMailbox } from "@/lib/mailbox/send";
 import { pollMailbox } from "@/lib/mailbox/poll";
+import { threadKeyFor } from "@/lib/mailbox/thread";
 import { attachmentProblem, formatBytes } from "@/lib/email-attachments";
 import { prepareEmailBody } from "@/lib/email-content";
 import { hasUnresolvedTags } from "@/lib/email-templates";
@@ -579,6 +580,7 @@ export async function sendEmailFromRecord(formData: FormData): Promise<void> {
     bodyText: text,
     bodyHtml: html ?? null,
     attachments: attachmentRecord.length ? attachmentRecord : null,
+    threadKey: threadKeyFor(subject, contactId || null, to),
     providerMessageId: sent.value.providerMessageId,
   });
 

@@ -235,6 +235,13 @@ export const emailMessages = pgTable("email_messages", {
   inReplyToId: uuid("in_reply_to_id"),
   /** What was attached — names, sizes and types. The bytes live in the mailbox's Sent folder, not here. */
   attachments: jsonb("attachments").$type<Array<{ name: string; size: number; type: string }>>(),
+  /**
+   * The conversation this belongs to: the subject with its Re:/Fwd: stripped,
+   * plus who it is with. Message-ID threading would be truer, but only one of
+   * the three providers lets Reach set one on the way out, so a header-based
+   * scheme would thread Gmail and leave Zoho and Outlook unthreaded.
+   */
+  threadKey: text("thread_key"),
   sentAt: timestamp("sent_at", { withTimezone: true }).defaultNow().notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
