@@ -1,6 +1,6 @@
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { activities, companies, connections, contacts, db, deals, syncedInvoices } from "@/db";
-import { getProvider, type AccountingProvider, type OAuthTokens } from "@/lib/providers";
+import { getProvider, type AccountingProvider, type OAuthTokens, type ProviderCompany, type ProviderResult } from "@/lib/providers";
 import { clientCredentials, refreshTokens } from "@/lib/oauth";
 
 /*
@@ -53,17 +53,50 @@ async function subscribeToPushes(
     .where(eq(connections.id, connectionId));
 }
 
+/**
+ * Every set of books this grant opens. One sign-in can cover several
+ * companies — somebody who runs three businesses consents once — and the
+ * workspace connecting takes exactly one of them.
+ */
+export async function connectableCompanies(
+  provider: AccountingProvider,
+  accessToken: string,
+): Promise<ProviderResult<ProviderCompany[]>> {
+  if (provider.companies) return provider.companies(accessToken);
+  const one = await provider.validate(accessToken);
+  return one.ok ? { ok: true, value: [one.value] } : one;
+}
+
 export async function saveConnection(
   workspaceId: string,
   provider: AccountingProvider,
   tokens: OAuthTokens,
   /** This deployment's own origin, which is what the provider will call back. */
   origin?: string,
+  /** Which of the grant's companies this workspace is taking, when it opens several. */
+  externalCompanyId?: string,
 ): Promise<Outcome> {
   const workspace = { id: workspaceId };
 
-  const identified = await provider.validate(tokens.accessToken);
-  if (!identified.ok) return identified;
+  const available = await connectableCompanies(provider, tokens.accessToken);
+  if (!available.ok) return available;
+  const chosen = externalCompanyId
+    ? available.value.find((company) => company.externalId === externalCompanyId)
+    : available.value[0];
+  if (!chosen) {
+    return { ok: false, error: "That company is not one this sign-in covers. Connect again and pick from the list." };
+  }
+  /* Two workspaces on one account must not both claim the same books: the
+     sync would write the same invoices into both and each would show the
+     other's receivables. */
+  const [taken] = await db
+    .select({ id: connections.id, workspaceId: connections.workspaceId })
+    .from(connections)
+    .where(and(eq(connections.provider, provider.id), eq(connections.externalCompanyId, chosen.externalId)));
+  if (taken && taken.workspaceId !== workspace.id) {
+    return { ok: false, error: `${chosen.name} is already connected to another workspace on this account. Switch to it, or pick a different company.` };
+  }
+  const identified = { ok: true as const, value: chosen };
 
   const values = {
     workspaceId: workspace.id,

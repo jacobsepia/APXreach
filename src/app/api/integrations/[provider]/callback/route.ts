@@ -4,7 +4,8 @@ import { auth } from "@/lib/auth";
 import { requireTenant } from "@/lib/workspace";
 import { getProvider } from "@/lib/providers";
 import { callbackUrl, clientCredentials, exchangeCode, statesMatch } from "@/lib/oauth";
-import { saveConnection } from "@/lib/sync";
+import { connectableCompanies, saveConnection } from "@/lib/sync";
+import { stashPendingBooks } from "@/lib/books-choice";
 
 /*
  * Step two: the provider sends the person back with a code. Verify the state
@@ -83,7 +84,22 @@ export async function GET(
   });
   if (!tokens.ok) return finish(tokens.error);
 
-  const saved = await saveConnection(tenant.workspaceId, provider, tokens.value, origin);
+  /*
+   * One sign-in can cover several sets of books. A workspace takes exactly
+   * one, so when there is a choice to make the person makes it rather than
+   * silently getting whichever the provider happened to list first.
+   */
+  const available = await connectableCompanies(provider, tokens.value.accessToken);
+  if (!available.ok) return finish(available.error);
+  if (available.value.length > 1) {
+    await stashPendingBooks({ provider: provider.id, workspaceId: tenant.workspaceId, tokens: tokens.value });
+    const response = NextResponse.redirect(`${origin}/settings/books`, { status: 303 });
+    response.cookies.set(`apxreach_pkce_${providerId}`, "", { path: "/api/integrations", maxAge: 0 });
+    response.cookies.set(`apxreach_state_${providerId}`, "", { path: "/api/integrations", maxAge: 0 });
+    return response;
+  }
+
+  const saved = await saveConnection(tenant.workspaceId, provider, tokens.value, origin, available.value[0].externalId);
   if (!saved.ok) return finish(saved.error);
   return finish();
 }

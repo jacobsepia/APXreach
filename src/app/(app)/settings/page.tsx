@@ -28,9 +28,9 @@ const stamp = new Intl.DateTimeFormat("en-CA", {
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; connected?: string; mailbox?: string; digest?: string }>;
+  searchParams: Promise<{ error?: string; connected?: string; mailbox?: string; digest?: string; created?: string }>;
 }) {
-  const { error, connected: justConnected, mailbox: justLinkedMailbox, digest: digestSent } = await searchParams;
+  const { error, connected: justConnected, mailbox: justLinkedMailbox, digest: digestSent, created: justCreated } = await searchParams;
   const { workspaceId, userId } = await requireTenant();
   const [team, invites] = await Promise.all([workspaceTeam(workspaceId), pendingInvites(workspaceId)]);
   const isOwner = team.some((member) => member.userId === userId && member.role === "owner");
@@ -96,6 +96,13 @@ export default async function SettingsPage({
           <p className="text-[13px] text-foreground">
             Mailbox connected. Mail you send from a record will go out from your own
             address.
+          </p>
+        </Card>
+      )}
+      {justCreated && !error && (
+        <Card className="border-[color-mix(in_srgb,var(--accent-data)_45%,transparent)] px-[18px] py-3">
+          <p className="text-[13px] text-foreground">
+            Workspace created and switched to. Connect its books below — the same APX Ledger sign-in can cover several companies, and you pick which one this workspace takes.
           </p>
         </Card>
       )}

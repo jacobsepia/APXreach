@@ -76,11 +76,6 @@ export async function acceptInvite(token: string, userId: string, userEmail: str
   if (!emailMatches(invite.email, userEmail)) {
     return { ok: false, error: `This invitation was sent to ${invite.email}. Sign in with that address to accept it.` };
   }
-  const [elsewhere] = await db.select({ id: workspaceMembers.id }).from(workspaceMembers).where(eq(workspaceMembers.userId, userId)).limit(1);
-  if (elsewhere) {
-    return { ok: false, error: "This account already belongs to another workspace. Reach shows one workspace per account; use a different address for this one." };
-  }
-
   await db.insert(workspaceMembers).values({ workspaceId: invite.workspaceId, userId, role: invite.role });
   await db.update(workspaceInvites).set({ acceptedAt: new Date(), acceptedBy: userId }).where(eq(workspaceInvites.id, invite.id));
   return { ok: true, workspaceId: invite.workspaceId, workspaceName: invite.workspaceName, alreadyMember: false };

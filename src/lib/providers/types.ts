@@ -146,6 +146,13 @@ export interface AccountingProvider {
   webhooks?: ProviderWebhooks;
   /** Check the credential and identify the company it opens. */
   validate(credentials: string): Promise<ProviderResult<ProviderCompany>>;
+  /**
+   * Every company this credential can see. One sign-in often covers several
+   * sets of books — somebody who runs three businesses consents once — and
+   * the workspace connecting has to be told which one it is taking. Absent
+   * for a provider whose credential only ever opens one.
+   */
+  companies?(credentials: string): Promise<ProviderResult<ProviderCompany[]>>;
   /** Pull everything the CRM mirrors. Incremental cursors come later. */
   pull(
     credentials: string,

@@ -178,7 +178,8 @@ export default async function AppLayout({
       <div className="flex min-w-0 flex-1 flex-col">
         <Ticker items={ticker} />
         <Topbar
-          workspaceName={workspace.name}
+          workspaces={tenant.workspaces}
+          activeWorkspaceId={workspace.id}
           userName={session.user.name}
           quickCreate={<QuickCreate companies={companyOptions} stages={stageOptions} />}
         />

@@ -2,18 +2,31 @@ import { randomUUID } from "node:crypto";
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { z } from "zod";
 
-/** One transaction: serialize repeat submissions on the authenticated user,
+/*
+ * One transaction: serialize repeat submissions on the authenticated user,
  * then create the workspace, membership and pipeline together or not at all.
- * Existing members always keep their workspace; this is not a workspace switcher.
+ *
+ * By default a person who already belongs somewhere keeps that workspace —
+ * this is the onboarding path, not a workspace switcher, and a double-submit
+ * must not leave two. `always` is the deliberate second business: somebody
+ * who runs more than one company, each with its own books.
  */
-export function provisionQueries(query: NeonQueryFunction<false, false>, userId: string, companyName: string) {
+export function provisionQueries(
+  query: NeonQueryFunction<false, false>,
+  userId: string,
+  companyName: string,
+  options: { always?: boolean } = {},
+) {
   const name = z.string().trim().min(1).max(80).parse(companyName);
   const slug = (name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "workspace") + "-" + randomUUID();
+  /* With `always`, the "existing" arm matches nothing, so a workspace is
+     always created and always returned. */
+  const existingFilter = options.always ? query`AND false` : query``;
   return [
     query`SELECT id FROM "user" WHERE id = ${userId} FOR UPDATE`,
     query`
       WITH existing AS (
-        SELECT workspace_id AS id FROM workspace_members WHERE user_id = ${userId}
+        SELECT workspace_id AS id FROM workspace_members WHERE user_id = ${userId} ${existingFilter}
         ORDER BY created_at, id LIMIT 1
       ), created AS (
         INSERT INTO workspaces (name, slug)
@@ -38,9 +51,13 @@ export function provisionQueries(query: NeonQueryFunction<false, false>, userId:
   ];
 }
 
-export async function provisionWorkspace(userId: string, companyName: string): Promise<string> {
+export async function provisionWorkspace(
+  userId: string,
+  companyName: string,
+  options: { always?: boolean } = {},
+): Promise<string> {
   const query = neon(process.env.DATABASE_URL!);
-  const result = await query.transaction(provisionQueries(query, userId, companyName), { isolationLevel: "ReadCommitted" });
+  const result = await query.transaction(provisionQueries(query, userId, companyName, options), { isolationLevel: "ReadCommitted" });
   const id = result[1][0]?.id;
   if (typeof id !== "string") throw new Error("Could not create your workspace. Sign in and try again.");
   return id;

@@ -268,23 +268,37 @@ export const apxledger: AccountingProvider = {
     clientSecretEnv: "APXLEDGER_CLIENT_SECRET",
   },
 
-  async validate(credentials) {
+  /*
+   * Ledger answers /connections with one entry per company the grant covers —
+   * the same shape Xero uses — so a person who keeps three businesses on one
+   * login gets three, and Reach asks which one this workspace is taking.
+   */
+  async companies(credentials) {
     const result = await ledgerFetch(credentials, "/api/v1/connections");
     if (!result.ok) return result;
     const body = result.value as { connections?: unknown[] };
-    const parsed = connectionSchema.safeParse(body.connections?.[0]);
+    const parsed = z.array(connectionSchema).safeParse(body.connections ?? []);
     if (!parsed.success) {
       return { ok: false, error: "Ledger answered, but not in the shape this version expects." };
     }
+    if (!parsed.data.length) {
+      return { ok: false, error: "That APX Ledger sign-in does not cover any company yet." };
+    }
     return {
       ok: true,
-      value: {
-        externalId: parsed.data.companyId,
-        name: parsed.data.name,
-        currency: parsed.data.baseCurrency,
-        scopes: parsed.data.scopes,
-      },
+      value: parsed.data.map((row) => ({
+        externalId: row.companyId,
+        name: row.name,
+        currency: row.baseCurrency,
+        scopes: row.scopes,
+      })),
     };
+  },
+
+  async validate(credentials) {
+    const all = await apxledger.companies!(credentials);
+    if (!all.ok) return all;
+    return { ok: true, value: all.value[0] };
   },
 
   async pull(credentials, externalCompanyId) {
