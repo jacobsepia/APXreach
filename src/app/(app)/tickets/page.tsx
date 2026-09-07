@@ -5,7 +5,7 @@ import { requireTenant } from "@/lib/workspace";
 import { money, relativeDay } from "@/lib/format";
 import { supportPipeline, workspaceTickets } from "@/lib/tickets/store";
 import { priorityLabels, slaHours, slaState, type Priority } from "@/lib/tickets/sla";
-import { Avatar, Card, LedgerDot, Pill } from "@/components/ui";
+import { Avatar, Card, LedgerDot, PageHeader, Pill } from "@/components/ui";
 import { ComposeEmail } from "@/components/compose-email";
 import { DeleteTicket, NewTicket, TicketStageSelect } from "@/components/ticket-controls";
 import { AlertTriangle, Clock, Mail } from "lucide-react";
@@ -47,24 +47,20 @@ export default async function TicketsPage() {
 
   return (
     <div className="flex flex-col gap-[18px]">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
-            <span className="gradient-text-flow">Tickets</span>
-          </h1>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
-            {openTickets.length} open
-            {breaching ? ` · ${breaching} past a deadline` : ""}
-            {owing ? ` · ${owing} from ${owing === 1 ? "a customer who owes" : "customers who owe"} money` : ""}
-            {" · "}response and resolution clocks by priority, wall-clock hours
-          </p>
-        </div>
-        <NewTicket companies={companyOptions} contacts={people} />
-      </div>
+      <PageHeader
+        title="Tickets"
+        subtitle={<>
+          {openTickets.length} open
+          {breaching ? ` · ${breaching} past a deadline` : ""}
+          {owing ? ` · ${owing} from ${owing === 1 ? "a customer who owes" : "customers who owe"} money` : ""}
+          {" · "}response and resolution clocks by priority, wall-clock hours
+        </>}
+        actions={<NewTicket companies={companyOptions} contacts={people} />}
+      />
 
-      <div className="grid grid-cols-4 items-start gap-3.5 max-lg:grid-cols-2">
+      <div className="grid grid-cols-4 items-start gap-3 max-xl:grid-cols-2 max-sm:grid-cols-1">
         {columns.map(({ stage, tickets: stageTickets }) => (
-          <div key={stage.id} className="flex flex-col gap-2.5">
+          <div key={stage.id} className="flex min-w-0 flex-col gap-2">
             <div className="flex items-baseline justify-between px-1">
               <span className="text-xs font-semibold tracking-[0.05em] text-[var(--text-tertiary)] uppercase">{stage.kind === "won" ? "Resolved · 30 days" : stage.name}</span>
               <span className="text-xs text-[var(--text-tertiary)]">{stageTickets.length}</span>

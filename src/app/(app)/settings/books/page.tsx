@@ -26,15 +26,15 @@ export default async function ChooseBooksPage() {
       </div>
 
       {!choice.ok ? (
-        <Card className="px-[18px] py-4">
+        <Card className="px-4 py-3.5">
           <Caps>Connection</Caps>
           <p className="mt-2 text-[13px] text-[#b91c1c]">{choice.error}</p>
           <Link href="/settings" className="mt-3 inline-flex h-9 items-center rounded-[10px] border border-input bg-white px-4 text-[13px] font-medium text-foreground">Back to Settings</Link>
         </Card>
       ) : (
-        <Card className="px-[18px] py-4">
+        <Card className="px-4 py-3.5">
           <Caps>Which company&apos;s books?</Caps>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-1.5 text-[13px] leading-snug text-muted-foreground">
             That {choice.providerLabel} sign-in covers {choice.companies.length} companies. This workspace takes one of them — its
             customers, invoices and balances are the ones you will see here. Running more than one business? Add a second
             workspace from the name at the top left and connect it to the next company through the same sign-in.

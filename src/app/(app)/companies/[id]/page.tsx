@@ -158,9 +158,9 @@ export default async function CompanyPage({
       </div>
 
       {/* Record header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3.5">
-          <div className="flex size-[46px] items-center justify-center rounded-xl bg-[var(--accent-plum-200)] font-display text-base font-semibold text-[var(--accent-primary)]">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex size-[42px] shrink-0 items-center justify-center rounded-xl bg-[var(--accent-plum-200)] font-display text-base font-semibold text-[var(--accent-primary)]">
             {company.name
               .split(/\s+/)
               .slice(0, 2)
@@ -168,8 +168,8 @@ export default async function CompanyPage({
               .join("")}
           </div>
           <div>
-            <div className="flex items-center gap-2.5">
-              <span className="font-display text-[22px] font-bold tracking-[-0.5px]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-display text-[19px] font-bold tracking-[-0.5px] sm:text-[22px]">
                 <span className="gradient-text-flow">{company.name}</span>
               </span>
               <Pill kind={company.lifecycleStage === "customer" ? "customer" : company.lifecycleStage === "opportunity" ? "opportunity" : "lead"}>
@@ -189,7 +189,7 @@ export default async function CompanyPage({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ComposeEmail
             recipients={people.map((p) => ({ ...p, companyName: company.name }))}
           />
@@ -223,10 +223,10 @@ export default async function CompanyPage({
       </div>
 
       {/* Three columns */}
-      <div className="grid grid-cols-[280px_minmax(0,1fr)_320px] items-start gap-4">
+      <div className="grid grid-cols-[280px_minmax(0,1fr)_320px] items-start gap-3.5 max-xl:grid-cols-1">
         {/* Left */}
-        <div className="flex flex-col gap-3.5">
-          <Card className="px-[18px] py-4">
+        <div className="flex flex-col gap-3">
+          <Card className="px-4 py-3.5">
             <Caps>About</Caps>
             <div className="mt-1.5 flex flex-col text-[13px]">
               {[
@@ -247,7 +247,7 @@ export default async function CompanyPage({
             </div>
           </Card>
 
-          <Card className="px-[18px] py-4">
+          <Card className="px-4 py-3.5">
             <Caps>Contacts</Caps>
             <div className="mt-2.5 flex flex-col gap-2.5">
               {people.map((p) => (
@@ -269,7 +269,7 @@ export default async function CompanyPage({
             </div>
           </Card>
 
-          <Card className="px-[18px] py-4">
+          <Card className="px-4 py-3.5">
             <div className="flex items-baseline justify-between">
               <Caps>Open deals</Caps>
               <span className="text-xs text-[var(--text-tertiary)]">{openDeals.length}</span>
@@ -296,7 +296,7 @@ export default async function CompanyPage({
         </div>
 
         {/* Timeline */}
-        <Card className="p-5">
+        <Card className="p-4">
           <div className="mb-3 font-display text-[15px] font-semibold text-foreground">Timeline</div>
           <TimelineComposer companyId={company.id} />
           <div className="mt-3 flex flex-col">
@@ -327,8 +327,8 @@ export default async function CompanyPage({
         </Card>
 
         {/* The books */}
-        <div className="flex flex-col gap-3.5">
-          <Card className="border-[color-mix(in_srgb,var(--accent-data)_40%,transparent)] px-[18px] py-4">
+        <div className="flex flex-col gap-3">
+          <Card className="border-[color-mix(in_srgb,var(--accent-data)_40%,transparent)] px-4 py-3.5">
             <div className="flex items-center justify-between">
               <Caps className="flex items-center gap-1.5">
                 <span>The books</span>
@@ -344,7 +344,7 @@ export default async function CompanyPage({
               )}
             </div>
             {synced ? (
-              <div className="mt-3 grid grid-cols-2 gap-3">
+              <div className="mt-3 grid grid-cols-2 gap-2.5">
                 <div>
                   <div className="text-[11px] text-[var(--text-tertiary)]">Outstanding</div>
                   <div className="font-display text-xl font-semibold tracking-[-0.4px] text-foreground">
@@ -380,7 +380,7 @@ export default async function CompanyPage({
           </Card>
 
           {invoices.length > 0 && (
-            <Card className="px-[18px] py-4">
+            <Card className="px-4 py-3.5">
               <Caps>Open invoices</Caps>
               <div className="mt-2 flex flex-col">
                 {invoices.map((inv, i) => {
@@ -442,7 +442,7 @@ export default async function CompanyPage({
           )}
 
           {holdMarketing && (
-            <Card className="bg-[var(--bg-alt)] px-[18px] py-3.5">
+            <Card className="bg-[var(--bg-alt)] px-4 py-3">
               <p className="text-xs leading-relaxed text-muted-foreground">
                 Overdue balance with a proposal on the table. Reach is holding marketing email
                 for this account until the balance clears.

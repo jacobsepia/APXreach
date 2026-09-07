@@ -5,7 +5,7 @@ import { workspaceTags } from "@/lib/tags";
 import { workspaceCampaigns } from "@/lib/campaigns/store";
 import { bulkSendingHint } from "@/lib/campaigns/send";
 import { createCampaign } from "@/lib/campaigns/actions";
-import { Card, Pill } from "@/components/ui";
+import { Card, PageHeader, Pill, TableScroll } from "@/components/ui";
 
 /*
  * Campaigns: one email to a list. The page says up front what makes it
@@ -34,35 +34,30 @@ export default async function CampaignsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
-            <span className="gradient-text-flow">Campaigns</span>
-          </h1>
-          <p className="mt-0.5 max-w-2xl text-[13px] text-muted-foreground">
-            One email to a list, through a sending service so your own mailbox never carries bulk mail. Anyone whose
-            company has an overdue balance is held back automatically — you don&rsquo;t chase an invoice on Tuesday and
-            offer a discount on Wednesday.
-          </p>
-        </div>
-        <form action={createCampaign} className="flex items-center gap-2">
+      <PageHeader
+        title="Campaigns"
+        subtitle={<>One email to a list, through a sending service so your own mailbox never carries bulk mail. Anyone whose company has an overdue balance is held back automatically — you don&rsquo;t chase an invoice on Tuesday and offer a discount on Wednesday.</>}
+        actions={
+          <form action={createCampaign} className="flex items-center gap-2">
           <input
             name="name"
             required
             maxLength={120}
             placeholder="Name this campaign…"
             aria-label="Campaign name"
-            className="h-8 w-56 rounded-[10px] border border-input bg-white px-3 text-[13px] text-foreground placeholder:text-[var(--text-tertiary)] focus:border-[#6b21a8] focus:outline-none"
+            className="h-8 w-56 max-sm:w-36 rounded-[10px] border border-input bg-white px-3 text-[13px] text-foreground placeholder:text-[var(--text-tertiary)] focus:border-[#6b21a8] focus:outline-none"
           />
           <button
             type="submit"
             className="flex h-8 items-center gap-1.5 rounded-[10px] bg-[image:var(--gradient-cta)] px-3.5 text-[13px] font-medium text-white"
           >
             <Megaphone className="size-3.5" />
-            New campaign
+            <span className="max-sm:hidden">New campaign</span>
+            <span className="sm:hidden">New</span>
           </button>
-        </form>
-      </div>
+          </form>
+        }
+      />
 
       {hint && (
         <Card className="border-[#fde68a] bg-[#fffbeb] p-4">
@@ -97,6 +92,7 @@ export default async function CampaignsPage() {
             being left out and why before anything leaves.
           </p>
         ) : (
+          <TableScroll min={880}>
           <div className="flex flex-col">
             <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1.2fr)_150px_100px_minmax(0,1fr)] items-center gap-3 border-b border-[var(--rule-soft)] px-5 pb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
               <span>Campaign</span>
@@ -149,6 +145,7 @@ export default async function CampaignsPage() {
               );
             })}
           </div>
+          </TableScroll>
         )}
       </Card>
     </div>

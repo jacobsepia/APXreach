@@ -7,7 +7,7 @@ import { workspaceTemplates } from "@/lib/email-template-store";
 import { workspaceEnrollments, workspaceSequences } from "@/lib/sequences/store";
 import { describeStep } from "@/lib/sequences/plan";
 import { runSequencesNow, stopEnrollment } from "@/lib/sequences/actions";
-import { Avatar, Card, Pill } from "@/components/ui";
+import { Avatar, Card, PageHeader, Pill, TableScroll } from "@/components/ui";
 import { EnrollSequence } from "@/components/enroll-sequence";
 import { Play, Repeat } from "lucide-react";
 
@@ -64,17 +64,11 @@ export default async function SequencesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
-            <span className="gradient-text-flow">Sequences</span>
-          </h1>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
-            Follow-ups on a schedule, from your own mailbox, that stop themselves when the books say paid or the customer replies.
-            {mailbox ? ` Sending as ${mailbox.emailAddress}.` : " Connect a mailbox in Settings to enrol anyone."}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Sequences"
+        subtitle={<>Follow-ups on a schedule, from your own mailbox, that stop themselves when the books say paid or the customer replies.{mailbox ? ` Sending as ${mailbox.emailAddress}.` : " Connect a mailbox in Settings to enrol anyone."}</>}
+        actions={
+          <>
           <form action={runSequencesNow}>
             <button type="submit" className="flex h-8 items-center gap-1.5 rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-foreground hover:border-[#6b21a8]" title="Runs every morning on its own; this runs anything due right now">
               <Play className="size-3.5" />
@@ -88,10 +82,11 @@ export default async function SequencesPage() {
             buttonLabel="Enrol someone"
             className="flex h-8 items-center gap-1.5 rounded-[10px] bg-[image:var(--gradient-cta)] px-3.5 text-[13px] font-medium text-white disabled:opacity-50"
           />
-        </div>
-      </div>
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-2 gap-3 max-lg:grid-cols-1">
+      <div className="grid grid-cols-2 gap-3 max-xl:grid-cols-1">
         {sequences.map((sequence, index) => (
           <Card key={sequence.id} index={index} className="p-5">
             <div className="flex items-start justify-between gap-3">
@@ -130,6 +125,7 @@ export default async function SequencesPage() {
             Nobody is enrolled yet. Use "Enrol someone" here, or "Remind automatically" beside an overdue invoice on a company page.
           </p>
         ) : (
+          <TableScroll min={880}>
           <div className="flex flex-col">
             <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1.2fr)_110px_130px_minmax(0,1fr)_80px] items-center gap-3 border-b border-[var(--rule-soft)] px-5 pb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
               <span>Who</span><span>Sequence</span><span>Progress</span><span>Next</span><span>Status</span><span className="sr-only">Actions</span>
@@ -172,6 +168,7 @@ export default async function SequencesPage() {
               );
             })}
           </div>
+          </TableScroll>
         )}
       </Card>
     </div>

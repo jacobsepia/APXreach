@@ -161,9 +161,9 @@ export default async function InboxPage() {
      up by construction: title, the counts as pills, the mailbox as a status
      chip, and the button. The messages are the page; this is its frame. */
   return (
-    <div className="flex h-[calc(100vh-112px)] min-h-[480px] flex-col overflow-hidden rounded-[14px] border border-[rgba(21,24,28,0.08)] bg-white shadow-[0_1px_2px_rgba(21,24,28,0.04)] max-md:h-auto">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[var(--rule-soft)] bg-[linear-gradient(100deg,#faf6fe,#ffffff_60%)] px-5 py-3">
-        <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
+    <div className="flex h-[calc(100dvh-108px)] min-h-[480px] flex-col overflow-hidden rounded-[14px] border border-[rgba(21,24,28,0.08)] bg-white shadow-[0_1px_2px_rgba(21,24,28,0.04)] max-md:h-auto xl:h-[calc(100dvh-116px)]">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--rule-soft)] bg-[linear-gradient(100deg,#faf6fe,#ffffff_60%)] px-4 py-2.5 sm:px-5">
+        <h1 className="font-display text-xl font-bold tracking-[-0.035em] sm:text-2xl">
           <span className="gradient-text-flow">Inbox</span>
         </h1>
         <div className="flex items-center gap-1.5 text-xs font-medium">
@@ -174,17 +174,17 @@ export default async function InboxPage() {
             {inboundCount} received
           </span>
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2.5">
+        <div className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
           {refreshed.map((box) => (
             <span
               key={box.id}
-              className="flex items-center gap-2 rounded-full border border-[var(--rule-soft)] bg-white px-3 py-1.5 text-xs text-[var(--text-tertiary)]"
+              className="flex min-w-0 items-center gap-2 rounded-full border border-[var(--rule-soft)] bg-white px-3 py-1.5 text-xs text-[var(--text-tertiary)]"
               title={box.lastError ?? `${box.providerLabel} is connected`}
             >
               <span className={`size-1.5 rounded-full ${box.lastError ? "bg-[#b91c1c]" : "bg-[#7cc00f]"}`} />
-              <span className="font-medium text-foreground">{box.providerLabel}</span>
-              <span>{box.emailAddress}</span>
-              {box.lastPolledAt && <span>· checked {stamp.format(box.lastPolledAt)}</span>}
+              <span className="font-medium text-foreground max-sm:hidden">{box.providerLabel}</span>
+              <span className="truncate">{box.emailAddress}</span>
+              {box.lastPolledAt && <span className="shrink-0 max-lg:hidden">· checked {stamp.format(box.lastPolledAt)}</span>}
               {box.lastError && <span className="font-medium text-[#b91c1c]">· {box.lastError}</span>}
             </span>
           ))}
@@ -194,7 +194,7 @@ export default async function InboxPage() {
               className="flex h-8 items-center gap-1.5 rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-foreground hover:border-[#6b21a8]"
             >
               <RefreshCw className="size-3.5" />
-              <span>Check for replies</span>
+              <span className="max-sm:hidden">Check for replies</span>
             </button>
           </form>
         </div>

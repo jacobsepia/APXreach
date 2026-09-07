@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { companies, db, deals, syncedInvoices, pipelineStages, pipelines } from "@/db";
 import { daysBetween, money, shortDate } from "@/lib/format";
-import { Avatar, Card, Pill } from "@/components/ui";
+import { Avatar, Card, PageHeader, Pill, TableScroll } from "@/components/ui";
 import { QuickCreate } from "@/components/quick-create";
 import { StageSelect } from "@/components/stage-select";
 import { requireTenant } from "@/lib/workspace";
@@ -105,16 +105,11 @@ export default async function DealsPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="flex flex-col gap-[18px]">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
-            <span className="gradient-text-flow">Deals</span>
-          </h1>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
-            {pipeline.name} · {money(openTotal)} open across {openCount} deals
-          </p>
-        </div>
-        <div className="flex items-center gap-2.5">
+      <PageHeader
+        title="Deals"
+        subtitle={`${pipeline.name} · ${money(openTotal)} open across ${openCount} deals`}
+        actions={
+          <>
           <div className="flex h-8 items-center gap-2 rounded-[10px] border border-border bg-white px-3 text-[13px] font-medium text-foreground">
             <span>{pipeline.name}</span>
             <ChevronDown className="size-3.5 text-[var(--text-tertiary)]" />
@@ -132,12 +127,14 @@ export default async function DealsPage({ searchParams }: { searchParams: Promis
             <span>Export</span>
           </a>
           <QuickCreate companies={companyOptions} stages={stageOptions} only="deal" buttonLabel="New deal" />
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {table ? (
         <Card index={0} className="overflow-hidden">
-          <div className="grid h-10 grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_130px_110px_100px_90px_minmax(0,1fr)_40px] items-center gap-3 border-b border-border bg-[image:var(--gradient-table-head)] px-4 text-[11px] font-semibold tracking-[0.05em] text-[var(--text-tertiary)] uppercase">
+          <TableScroll min={1120}>
+          <div className="grid h-9 grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_130px_110px_100px_90px_minmax(0,1fr)_40px] items-center gap-3 border-b border-border bg-[image:var(--gradient-table-head)] px-4 text-[11px] font-semibold tracking-[0.05em] text-[var(--text-tertiary)] uppercase">
             <span>Deal</span><span>Company</span><span>Stage</span><span className="text-right">Amount</span><span>Close</span><span>Owner</span><span>Books / reason</span><span className="sr-only">Actions</span>
           </div>
           {rows.map((d, i) => (
@@ -160,11 +157,12 @@ export default async function DealsPage({ searchParams }: { searchParams: Promis
             </div>
           ))}
           {rows.length === 0 && <p className="px-4 py-6 text-sm text-muted-foreground">No deals yet.</p>}
+          </TableScroll>
         </Card>
       ) : (
-      <div className="grid grid-cols-4 items-start gap-3.5">
+      <div className="grid grid-cols-4 items-start gap-3 overflow-x-auto overscroll-x-contain max-lg:grid-cols-[repeat(4,minmax(232px,1fr))] max-lg:pb-1">
         {columns.map(({ stage, deals: stageDeals, total }) => (
-          <div key={stage.id} className="flex flex-col gap-2.5">
+          <div key={stage.id} className="flex min-w-0 flex-col gap-2">
             <div className="flex items-baseline justify-between px-1">
               <span className="text-xs font-semibold tracking-[0.05em] text-[var(--text-tertiary)] uppercase">
                 {stage.kind === "won" ? "Won this month" : stage.name}

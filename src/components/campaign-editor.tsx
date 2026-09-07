@@ -103,9 +103,9 @@ export default function CampaignEditor({ campaign, lists, initialPreview, canSen
   const blocked = !canSend || !tagId || !preview.send || emptyBody || pending;
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
+    <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-3.5 max-xl:grid-cols-1">
       <div className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
           <label className="flex flex-col gap-1">
             <span className={label}>Campaign name</span>
             <input className={field} value={name} maxLength={120} disabled={readOnly} onChange={(e) => setName(e.target.value)} />
@@ -126,7 +126,7 @@ export default function CampaignEditor({ campaign, lists, initialPreview, canSen
           <input className={field} value={subject} maxLength={998} disabled={readOnly} onChange={(e) => setSubject(e.target.value)} />
         </label>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
           <label className="flex flex-col gap-1">
             <span className={label}>From name</span>
             <input className={field} value={fromName} maxLength={120} disabled={readOnly} onChange={(e) => setFromName(e.target.value)} />

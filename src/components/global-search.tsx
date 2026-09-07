@@ -70,10 +70,18 @@ export function GlobalSearch() {
     .map((kind) => ({ kind, items: hits.filter((hit) => hit.kind === kind) }))
     .filter((group) => group.items.length);
 
+  /*
+   * On a phone the whole strip does not fit, so search rides as an icon and
+   * opens over the row when it is tapped — the field is still one tap away and
+   * the rest of the strip keeps its room.
+   */
   return (
-    <div ref={box} className="relative">
-      <div className="flex h-8 w-[280px] items-center gap-2 rounded-[10px] border border-input bg-white px-3 text-[13px] text-foreground focus-within:border-[#6b21a8]">
-        {busy ? <LoaderCircle className="size-[15px] animate-spin text-[var(--text-tertiary)]" /> : <Search className="size-[15px] text-[var(--text-tertiary)]" />}
+    <div ref={box} className="relative max-sm:static">
+      <div
+        onClick={() => input.current?.focus()}
+        className="flex h-8 w-[280px] items-center gap-2 rounded-[10px] border border-input bg-white px-3 text-[13px] text-foreground transition-[width] duration-200 focus-within:border-[#6b21a8] max-lg:w-[190px] max-sm:w-8 max-sm:justify-center max-sm:px-0 max-sm:focus-within:absolute max-sm:focus-within:right-0 max-sm:focus-within:z-20 max-sm:focus-within:w-[calc(100vw-1.75rem)] max-sm:focus-within:justify-start max-sm:focus-within:px-3"
+      >
+        {busy ? <LoaderCircle className="size-[15px] shrink-0 animate-spin text-[var(--text-tertiary)]" /> : <Search className="size-[15px] shrink-0 text-[var(--text-tertiary)]" />}
         <input
           ref={input}
           value={query}
@@ -92,13 +100,13 @@ export function GlobalSearch() {
           aria-controls="global-search-results"
           role="combobox"
           aria-autocomplete="list"
-          className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[var(--text-tertiary)]"
+          className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[var(--text-tertiary)] max-sm:w-0 max-sm:flex-none max-sm:focus:w-auto max-sm:focus:flex-1"
         />
-        <kbd className="rounded border border-[var(--rule-soft)] px-1 text-[10px] text-[var(--text-tertiary)]">⌘K</kbd>
+        <kbd className="rounded border border-[var(--rule-soft)] px-1 text-[10px] text-[var(--text-tertiary)] max-lg:hidden">⌘K</kbd>
       </div>
 
       {open && query.trim().length >= 2 && (
-        <div id="global-search-results" role="listbox" className="absolute right-0 top-10 z-40 w-[380px] overflow-hidden rounded-[12px] border border-[rgba(21,24,28,0.1)] bg-white shadow-[0_12px_32px_rgba(21,24,28,0.14)]">
+        <div id="global-search-results" role="listbox" className="absolute right-0 top-10 z-40 w-[380px] max-w-[calc(100vw-1.75rem)] overflow-hidden rounded-[12px] border border-[rgba(21,24,28,0.1)] bg-white shadow-[0_12px_32px_rgba(21,24,28,0.14)]">
           {grouped.length === 0 && !busy && <p className="px-3 py-3 text-[13px] text-muted-foreground">Nothing matches “{query.trim()}”.</p>}
           {grouped.map((group) => (
             <div key={group.kind}>

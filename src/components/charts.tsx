@@ -47,6 +47,10 @@ export function ColumnChart({
   const max = niceMax(rawMax);
   /* Direct-label only the tallest column of each series; the rest is the tooltip's and the table's. */
   const peaks = series.map((_, index) => Math.max(...groups.map((group) => group.values[index] ?? 0)));
+  /* On a phone a thirteen-week axis gives each label about twenty pixels, which
+     is "J…" thirteen times. Mark every nth group as a tick and the stylesheet
+     drops the rest at narrow widths, so the ones that remain can be read. */
+  const stride = groups.length > 9 ? 3 : groups.length > 6 ? 2 : 1;
 
   return (
     <figure className={styles.figure}>
@@ -64,8 +68,8 @@ export function ColumnChart({
           </div>
         ))}
         <div className={styles.grid} style={{ bottom: 22 }} />
-        {groups.map((group) => (
-          <div key={group.label} className={styles.group} data-label={group.label}>
+        {groups.map((group, groupIndex) => (
+          <div key={group.label} className={styles.group} data-label={group.label} data-tick={groupIndex % stride === 0 ? "" : undefined}>
             {series.map((item, index) => {
               const value = group.values[index] ?? 0;
               const height = `${(value / max) * 100}%`;

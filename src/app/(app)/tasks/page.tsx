@@ -2,7 +2,7 @@ import Link from "next/link";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { activities, companies, db } from "@/db";
 import { requireTenant } from "@/lib/workspace";
-import { Card } from "@/components/ui";
+import { Card, PageHeader } from "@/components/ui";
 import { QuickCreate } from "@/components/quick-create";
 import { TaskCheckbox } from "@/components/task-checkbox";
 import { RecordActions } from "@/components/record-actions";
@@ -40,17 +40,11 @@ export default async function TasksPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
-            <span className="gradient-text-flow">Tasks</span>
-          </h1>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
-            {rows.length} open · tick one off and it leaves the list
-          </p>
-        </div>
-        <QuickCreate companies={companyOptions} stages={[]} only="task" buttonLabel="New task" />
-      </div>
+      <PageHeader
+        title="Tasks"
+        subtitle={`${rows.length} open · tick one off and it leaves the list`}
+        actions={<QuickCreate companies={companyOptions} stages={[]} only="task" buttonLabel="New task" />}
+      />
       <Card index={0} className="overflow-hidden">
         {rows.map((task, i) => {
           const overdue =
@@ -60,7 +54,7 @@ export default async function TasksPage() {
           return (
             <div
               key={task.id}
-              className={`flex items-center gap-3 px-4 py-3 ${i < rows.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
+              className={`flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[var(--tint)] ${i < rows.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
             >
               <TaskCheckbox taskId={task.id} />
               <div className="min-w-0 flex-1">
@@ -77,7 +71,7 @@ export default async function TasksPage() {
                 </div>
               </div>
               <span
-                className={`text-xs ${overdue ? "font-semibold text-[#b91c1c]" : "text-[var(--text-tertiary)]"}`}
+                className={`shrink-0 text-right text-xs ${overdue ? "font-semibold text-[#b91c1c]" : "text-[var(--text-tertiary)]"}`}
               >
                 {task.dueAt ? (overdue ? "Overdue — " : "") + stamp.format(task.dueAt) : "No due date"}
               </span>

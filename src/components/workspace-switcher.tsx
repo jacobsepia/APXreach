@@ -34,12 +34,12 @@ export function WorkspaceSwitcher({ workspaces, activeId }: { workspaces: Worksp
         aria-expanded={open}
         className="flex h-8 items-center gap-2 rounded-[10px] border border-border bg-white px-3 text-[13px] font-medium text-foreground hover:border-[#6b21a8]"
       >
-        <span className="max-w-[220px] truncate">{active?.workspaceName}</span>
+        <span className="max-w-[220px] truncate max-lg:max-w-[130px] max-sm:max-w-[84px]">{active?.workspaceName}</span>
         <ChevronDown className="size-3.5 text-[var(--text-tertiary)]" />
       </button>
 
       {open && (
-        <div role="menu" className="absolute left-0 top-10 z-40 w-[280px] overflow-hidden rounded-[12px] border border-[rgba(21,24,28,0.1)] bg-white p-1 shadow-[0_12px_32px_rgba(21,24,28,0.14)]">
+        <div role="menu" className="absolute left-0 top-10 z-40 w-[280px] max-w-[calc(100vw-1.75rem)] overflow-hidden rounded-[12px] border border-[rgba(21,24,28,0.1)] bg-white p-1 shadow-[0_12px_32px_rgba(21,24,28,0.14)]">
           <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
             {workspaces.length === 1 ? "Your workspace" : "Your workspaces"}
           </p>

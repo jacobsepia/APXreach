@@ -51,14 +51,16 @@ export default async function CampaignPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2.5">
         <div className="min-w-0">
-          <Link href="/campaigns" className="mb-1 flex items-center gap-1 text-xs text-[var(--text-tertiary)] hover:text-foreground">
+          <Link href="/campaigns" className="mb-1 flex items-center gap-1 text-xs text-[var(--text-tertiary)] transition-colors hover:text-foreground">
             <ArrowLeft className="size-3" />
             Campaigns
           </Link>
-          <h1 className="font-display text-2xl font-bold tracking-[-0.035em] text-foreground">{campaign.name}</h1>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
+          <h1 className="font-display text-xl font-bold tracking-[-0.035em] sm:text-2xl">
+            <span className="gradient-text-flow">{campaign.name}</span>
+          </h1>
+          <p className="mt-0.5 max-w-2xl text-[13px] leading-snug text-muted-foreground">
             {campaign.status === "draft"
               ? "Nothing leaves until you press Send, and you'll see exactly who it reaches first."
               : `Sent ${campaign.sentAt ? stamp.format(campaign.sentAt) : ""} — ${campaign.sentCount} delivered${campaign.failedCount ? `, ${campaign.failedCount} failed` : ""}${campaign.heldCount ? `, ${campaign.heldCount} held back` : ""}.`}
@@ -105,8 +107,8 @@ export default async function CampaignPage({
           sendingHint={bulkSendingHint()}
         />
       ) : (
-        <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
-          <Card className="p-5">
+        <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-3.5 max-xl:grid-cols-1">
+          <Card className="p-4">
             <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-tertiary)]">What was sent</div>
             <div className="mt-2 font-display text-[15px] font-semibold text-foreground">{campaign.subject}</div>
             <div className="mt-1 text-xs text-[var(--text-tertiary)]">

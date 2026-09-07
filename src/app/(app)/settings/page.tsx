@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth";
 import { disconnectMailbox } from "@/lib/actions";
 import { configuredMailboxProviders } from "@/lib/mailbox/providers";
 import { comingSoon, providers } from "@/lib/providers";
-import { Card, Caps, LedgerDot, Pill } from "@/components/ui";
+import { Card, Caps, LedgerDot, PageHeader, Pill } from "@/components/ui";
 import { DisconnectButton, SyncNowButton } from "@/components/connect-books";
 import { TeamSettings } from "@/components/team-settings";
 import { pendingInvites, workspaceTeam } from "@/lib/team";
@@ -58,21 +58,16 @@ export default async function SettingsPage({
 
   return (
     <div className="flex max-w-2xl flex-col gap-4">
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
-          <span className="gradient-text-flow">Settings</span>
-        </h1>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">
-          Reach reads the books through whichever system keeps them. You approve
-          the connection on their side — nothing is copied by hand.
-        </p>
-      </div>
+      <PageHeader
+        title="Settings"
+        subtitle="Reach reads the books through whichever system keeps them. You approve the connection on their side — nothing is copied by hand."
+      />
 
-      <Card className="px-[18px] py-4">
-        <div className="flex items-center justify-between gap-4">
+      <Card className="px-4 py-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5">
           <div>
             <Caps>Team</Caps>
-            <p className="mt-2 text-sm text-muted-foreground">{team.length === 1 ? "Just you so far." : `${team.length} people share this workspace.`} Everyone sees the same contacts, deals, books and inbox; each person connects their own mailbox.</p>
+            <p className="mt-1.5 text-[13px] leading-snug text-muted-foreground">{team.length === 1 ? "Just you so far." : `${team.length} people share this workspace.`} Everyone sees the same contacts, deals, books and inbox; each person connects their own mailbox.</p>
           </div>
         </div>
         <TeamSettings
@@ -84,15 +79,15 @@ export default async function SettingsPage({
         />
       </Card>
 
-      <Card className="px-[18px] py-4"><div className="flex items-center justify-between gap-4"><div><Caps>Email templates</Caps><p className="mt-2 text-sm text-muted-foreground">Personal greetings, follow-ups, and invoice reminders. Edit your ten workspace templates and their personalization tags.</p></div><Link href="/settings/templates" className="shrink-0 rounded-lg border border-input bg-white px-3 py-2 text-xs font-medium">Manage templates →</Link></div></Card>
+      <Card className="px-4 py-3.5"><div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5"><div className="min-w-0"><Caps>Email templates</Caps><p className="mt-1.5 text-[13px] leading-snug text-muted-foreground">Personal greetings, follow-ups, and invoice reminders. Edit your ten workspace templates and their personalization tags.</p></div><Link href="/settings/templates" className="shrink-0 rounded-lg border border-input bg-white px-3 py-2 text-xs font-medium">Manage templates →</Link></div></Card>
 
       {error && (
-        <Card className="border-[color-mix(in_srgb,var(--accent-hot)_35%,transparent)] px-[18px] py-3">
+        <Card className="border-[color-mix(in_srgb,var(--accent-hot)_35%,transparent)] px-4 py-2.5">
           <p className="text-[13px] font-medium text-[#b91c1c]">{error}</p>
         </Card>
       )}
       {justLinkedMailbox && !error && (
-        <Card className="border-[color-mix(in_srgb,var(--accent-data)_45%,transparent)] px-[18px] py-3">
+        <Card className="border-[color-mix(in_srgb,var(--accent-data)_45%,transparent)] px-4 py-2.5">
           <p className="text-[13px] text-foreground">
             Mailbox connected. Mail you send from a record will go out from your own
             address.
@@ -100,14 +95,14 @@ export default async function SettingsPage({
         </Card>
       )}
       {justCreated && !error && (
-        <Card className="border-[color-mix(in_srgb,var(--accent-data)_45%,transparent)] px-[18px] py-3">
+        <Card className="border-[color-mix(in_srgb,var(--accent-data)_45%,transparent)] px-4 py-2.5">
           <p className="text-[13px] text-foreground">
             Workspace created and switched to. Connect its books below — the same APX Ledger sign-in can cover several companies, and you pick which one this workspace takes.
           </p>
         </Card>
       )}
       {justConnected && !error && (
-        <Card className="border-[color-mix(in_srgb,var(--accent-data)_45%,transparent)] px-[18px] py-3">
+        <Card className="border-[color-mix(in_srgb,var(--accent-data)_45%,transparent)] px-4 py-2.5">
           <p className="text-[13px] text-foreground">
             Connected. The first sync has already run — your books are on the
             dashboard.
@@ -116,7 +111,7 @@ export default async function SettingsPage({
       )}
 
       {live && connection && (
-        <Card className="px-[18px] py-4">
+        <Card className="px-4 py-3.5">
           <div className="flex items-center justify-between">
             <Caps>Connected books</Caps>
             <div className="flex items-center gap-2">
@@ -164,7 +159,7 @@ export default async function SettingsPage({
       {available.map((p) => {
         const isLive = live && connection?.provider === p.id;
         return (
-          <Card key={p.id} className="px-[18px] py-4">
+          <Card key={p.id} className="px-4 py-3.5">
             <div className="flex items-center justify-between">
               <Caps>{p.label}</Caps>
               {isLive ? (
@@ -179,7 +174,7 @@ export default async function SettingsPage({
                 with the real figures on the next sync.
               </p>
             )}
-            <p className="mt-2 text-sm text-muted-foreground">{p.connectHint}</p>
+            <p className="mt-1.5 text-[13px] leading-snug text-muted-foreground">{p.connectHint}</p>
             <Link
               href={`/api/integrations/${p.id}/start`}
               prefetch={false}
@@ -191,7 +186,7 @@ export default async function SettingsPage({
         );
       })}
 
-      <Card className="px-[18px] py-4">
+      <Card className="px-4 py-3.5">
         <div className="flex items-center justify-between">
           <Caps>Your mailbox</Caps>
           {myMailboxes.length > 0 ? (
@@ -200,7 +195,7 @@ export default async function SettingsPage({
             <Pill kind="customer">Not connected</Pill>
           )}
         </div>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-1.5 text-[13px] leading-snug text-muted-foreground">
           Mail to a contact goes out from your own address, so the reply lands in the
           inbox you already watch and the thread reads normally to them. A mailbox is
           yours alone — a colleague connects their own and sends as themselves.
@@ -276,7 +271,7 @@ export default async function SettingsPage({
       </Card>
 
       {comingSoon.map((p) => (
-        <Card key={p.id} className="px-[18px] py-4">
+        <Card key={p.id} className="px-4 py-3.5">
           <div className="flex items-center justify-between">
             <Caps>{p.label}</Caps>
             <Pill kind="warning">Coming soon</Pill>
@@ -290,7 +285,7 @@ export default async function SettingsPage({
         </Card>
       ))}
 
-      <Card className="px-[18px] py-4">
+      <Card className="px-4 py-3.5">
         <Caps>How the connection works</Caps>
         <p className="mt-2 text-xs leading-relaxed text-[var(--text-tertiary)]">
           OAuth2 authorization-code with PKCE, against the provider&apos;s own consent
@@ -302,7 +297,7 @@ export default async function SettingsPage({
         </p>
       </Card>
 
-      <Card className="px-[18px] py-4">
+      <Card className="px-4 py-3.5">
         <Caps>Sign in with APX</Caps>
         <p className="mt-2 text-xs leading-relaxed text-[var(--text-tertiary)]">
           Ledger already issues id_tokens for the `openid` scope, so one identity

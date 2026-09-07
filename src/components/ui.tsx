@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /*
@@ -131,10 +133,74 @@ export function EmptyState({
   phase: string;
 }) {
   return (
-    <Card className="flex flex-col items-start gap-2 p-8">
+    <Card className="flex flex-col items-start gap-2 p-6">
       <div className="font-display text-lg font-semibold text-foreground">{title}</div>
       <p className="max-w-md text-sm text-muted-foreground">{body}</p>
       <Pill kind="opportunity" className="mt-2">{phase}</Pill>
     </Card>
+  );
+}
+
+/*
+ * Every page opens the same way: the name in Ledger's flowing plum, one line
+ * saying what the page is for, and whatever acts on it pushed to the right.
+ * Having it in one place is what keeps fourteen pages reading as one product —
+ * and what stops the actions wrapping into the title on a phone.
+ */
+export function PageHeader({
+  title,
+  subtitle,
+  actions,
+  back,
+}: {
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  actions?: React.ReactNode;
+  /** A subpage's way back to its parent, above the title. */
+  back?: { href: string; label: string };
+}) {
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2.5">
+      <div className="min-w-0">
+        {back && (
+          <Link
+            href={back.href}
+            className="mb-1 inline-flex items-center gap-1 text-xs text-[var(--text-tertiary)] transition-colors hover:text-foreground"
+          >
+            <ChevronLeft className="size-3" />
+            {back.label}
+          </Link>
+        )}
+        <h1 className="font-display text-xl font-bold tracking-[-0.035em] sm:text-2xl">
+          <span className="gradient-text-flow">{title}</span>
+        </h1>
+        {subtitle && (
+          <p className="mt-0.5 max-w-2xl text-[13px] leading-snug text-muted-foreground">{subtitle}</p>
+        )}
+      </div>
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+    </div>
+  );
+}
+
+/*
+ * A wide table on a narrow screen. The columns keep the widths that make them
+ * readable and the table scrolls inside its own box, rather than the whole
+ * page scrolling sideways or the columns crushing into each other. `min`
+ * is the width below which the grid stops making sense.
+ */
+export function TableScroll({
+  min,
+  className,
+  children,
+}: {
+  min: number;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={cn("scroll-x-cue overflow-x-auto overscroll-x-contain", className)}>
+      <div style={{ minWidth: min }}>{children}</div>
+    </div>
   );
 }

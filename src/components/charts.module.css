@@ -10,6 +10,13 @@
 .gridLabel { position:absolute; right:0; transform:translateY(-100%); padding-bottom:2px; font-size:10px; color:#9aa1ab; font-variant-numeric:tabular-nums; pointer-events:none; }
 .group { position:relative; display:flex; flex:1; min-width:0; height:100%; align-items:flex-end; justify-content:center; gap:2px; }
 .group::after { content:attr(data-label); position:absolute; left:0; right:0; bottom:-20px; text-align:center; font-size:10px; color:#9aa1ab; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* Narrow: keep only the marked ticks and let them spill past their column,
+   so a handful of readable dates beat a row of ellipses. */
+@media (max-width:760px) {
+  .group:not([data-tick])::after { content:none; }
+  .group[data-tick]::after { overflow:visible; text-overflow:clip; }
+}
 .col { position:relative; display:flex; align-items:flex-end; width:100%; max-width:22px; height:100%; border:0; padding:0; background:none; cursor:default; }
 .col:focus-visible { outline:2px solid rgba(107,33,168,.35); outline-offset:2px; border-radius:4px; }
 .fill { width:100%; min-height:2px; border-radius:4px 4px 0 0; transition:filter .12s; }

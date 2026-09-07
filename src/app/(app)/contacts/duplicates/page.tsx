@@ -30,8 +30,8 @@ export default async function DuplicatesPage() {
         <span className="font-medium text-foreground">Duplicates</span>
       </div>
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-[-0.035em]"><span className="gradient-text-flow">Duplicates</span></h1>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">
+        <h1 className="font-display text-xl font-bold tracking-[-0.035em] sm:text-2xl"><span className="gradient-text-flow">Duplicates</span></h1>
+        <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
           {people.length + firms.length === 0
             ? "Nothing looks like a duplicate. People are compared by email address and full name; companies by name and domain."
             : `${people.length} ${people.length === 1 ? "group" : "groups"} of people and ${firms.length} of companies look alike. Pick the record to keep in each; the rest fold into it — emails, notes, deals and tickets included. Merging cannot be undone.`}

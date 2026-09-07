@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
 import { addTagToContact, removeTagFromContact } from "@/lib/tag-actions";
-import { tagStyle } from "@/lib/tags";
+import { tagStyle } from "@/lib/tag-styles";
 
 /*
  * The tags on one person: chips with an x, and a "+" that offers the tags

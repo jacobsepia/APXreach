@@ -183,7 +183,7 @@ export default async function AppLayout({
           userName={session.user.name}
           quickCreate={<QuickCreate companies={companyOptions} stages={stageOptions} />}
         />
-        <main className="flex-1 px-8 py-7">{children}</main>
+        <main className="flex-1 px-3.5 py-4 sm:px-5 xl:px-7 xl:py-5">{children}</main>
       </div>
     </div>
     </WorkspaceProvider>

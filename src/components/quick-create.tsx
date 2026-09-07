@@ -55,10 +55,11 @@ export function QuickCreate({
       <button
         type="button"
         onClick={() => (only ? setOpen(only) : setMenu((m) => !m))}
-        className="flex h-8 items-center gap-1.5 rounded-[10px] bg-[image:var(--gradient-cta)] px-3.5 text-[13px] font-medium text-white"
+        aria-label={buttonLabel ?? "New"}
+        className="flex h-8 items-center gap-1.5 rounded-[10px] bg-[image:var(--gradient-cta)] px-3.5 text-[13px] font-medium text-white max-sm:gap-0 max-sm:px-2.5"
       >
         <Plus className="size-3.5" />
-        <span>{buttonLabel ?? "New"}</span>
+        <span className="max-sm:hidden">{buttonLabel ?? "New"}</span>
       </button>
 
       {menu && !only && (

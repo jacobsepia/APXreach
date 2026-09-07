@@ -3,7 +3,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { companies, db, deals } from "@/db";
 import { requireTenant } from "@/lib/workspace";
 import { money } from "@/lib/format";
-import { Avatar, Card, LedgerDot, StagePill } from "@/components/ui";
+import { Avatar, Card, LedgerDot, PageHeader, StagePill, TableScroll } from "@/components/ui";
 import { Download } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -34,23 +34,20 @@ export default async function CompaniesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
-            <span className="gradient-text-flow">Companies</span>
-          </h1>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
-            {rows.length} companies · what they owe comes straight from the books
-          </p>
-        </div>
-        <a href="/api/export/companies" download className="flex h-8 items-center gap-1.5 rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-foreground hover:border-[#6b21a8]">
-          <Download className="size-3.5" />
-          <span>Export CSV</span>
-        </a>
-      </div>
+      <PageHeader
+        title="Companies"
+        subtitle={`${rows.length} companies · what they owe comes straight from the books`}
+        actions={
+          <a href="/api/export/companies" download className="flex h-8 items-center gap-1.5 rounded-[10px] border border-input bg-white px-3 text-[13px] font-medium text-foreground hover:border-[#6b21a8]">
+            <Download className="size-3.5" />
+            <span>Export CSV</span>
+          </a>
+        }
+      />
 
       <Card index={0} className="overflow-hidden">
-        <div className="grid h-10 grid-cols-[240px_170px_120px_70px_140px_120px_120px] items-center gap-3 border-b border-border bg-[image:var(--gradient-table-head)] px-4 text-[11px] font-semibold tracking-[0.05em] text-[var(--text-tertiary)] uppercase">
+        <TableScroll min={1010}>
+        <div className="grid h-9 grid-cols-[240px_170px_120px_70px_140px_120px_120px] items-center gap-3 border-b border-border bg-[image:var(--gradient-table-head)] px-4 text-[11px] font-semibold tracking-[0.05em] text-[var(--text-tertiary)] uppercase">
           <span>Company</span>
           <span>City</span>
           <span>Stage</span>
@@ -62,7 +59,7 @@ export default async function CompaniesPage() {
         {rows.map((row, i) => (
           <div
             key={row.id}
-            className={`transition-colors hover:bg-[var(--tint)] grid h-[46px] grid-cols-[240px_170px_120px_70px_140px_120px_120px] items-center gap-3 px-4 text-[13px] ${i < rows.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
+            className={`transition-colors hover:bg-[var(--tint)] grid h-[42px] grid-cols-[240px_170px_120px_70px_140px_120px_120px] items-center gap-3 px-4 text-[13px] ${i < rows.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
           >
             <span className="min-w-0">
               <Link
@@ -102,6 +99,7 @@ export default async function CompaniesPage() {
             </span>
           </div>
         ))}
+        </TableScroll>
       </Card>
     </div>
   );

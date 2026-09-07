@@ -1,24 +1,11 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { contactTags, contacts, db, tags } from "@/db";
 
+/* Colours live in their own module so a client component can import them
+   without dragging the database in behind them. */
+export { tagColors, tagStyle, tagStyles, type TagColor } from "./tag-styles";
+
 /* Reading tags. Writes live in tag-actions.ts. */
-
-export const tagColors = ["plum", "lime", "amber", "rose", "sky", "slate"] as const;
-export type TagColor = (typeof tagColors)[number];
-
-/** The chip styles, one per colour, so a workspace's tags read as a set. */
-export const tagStyles: Record<TagColor, string> = {
-  plum: "bg-[var(--tint-strong)] text-[var(--accent-primary)]",
-  lime: "bg-[#eef7dd] text-[#4d7c0f]",
-  amber: "bg-[#fef3c7] text-[#a16207]",
-  rose: "bg-[#fee2e2] text-[#b91c1c]",
-  sky: "bg-[#e0f2fe] text-[#0369a1]",
-  slate: "bg-[#eef1f4] text-[#475569]",
-};
-
-export function tagStyle(color: string): string {
-  return tagStyles[(color as TagColor) in tagStyles ? (color as TagColor) : "plum"];
-}
 
 export type Tag = { id: string; name: string; color: string; count: number };
 

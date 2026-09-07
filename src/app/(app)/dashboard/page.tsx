@@ -120,7 +120,7 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="font-display text-[28px] font-bold tracking-[-0.84px] text-foreground">
+        <h1 className="font-display text-[22px] font-bold tracking-[-0.6px] text-foreground sm:text-[28px] sm:tracking-[-0.84px]">
           {attentionCount > 0 ? (
             <>
               {attentionCount === 1 ? "One thing needs" : `${["", "One", "Two", "Three", "Four", "Five"][attentionCount] ?? attentionCount} things need`} you this{" "}
@@ -132,47 +132,47 @@ export default async function DashboardPage() {
             </>
           )}
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-0.5 text-[13px] text-muted-foreground">
           What the pipeline and the books agree on today.
         </p>
       </div>
 
       {/* Stat band */}
-      <div className="grid grid-cols-4 gap-3.5">
-        <Card index={0} className="px-[18px] py-4">
+      <div className="grid grid-cols-4 gap-3 max-xl:grid-cols-2">
+        <Card index={0} className="px-4 py-3.5">
           <Caps>Open pipeline</Caps>
-          <div className="mt-1.5 font-display text-[25px] font-semibold tracking-[-0.5px] text-foreground">
+          <div className="mt-1 font-display text-[22px] font-semibold tracking-[-0.5px] text-foreground sm:text-[25px]">
             {money(openTotal)}
           </div>
           <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">
             {openCount} open deals
           </div>
         </Card>
-        <Card index={1} className="px-[18px] py-4">
+        <Card index={1} className="px-4 py-3.5">
           <Caps>Won this month</Caps>
-          <div className="mt-1.5 font-display text-[25px] font-semibold tracking-[-0.5px] text-foreground">
+          <div className="mt-1 font-display text-[22px] font-semibold tracking-[-0.5px] text-foreground sm:text-[25px]">
             {money(Number(won.total))}
           </div>
           <div className="mt-0.5 text-xs text-[var(--accent-success)]">
             {Number(won.count)} deals closed
           </div>
         </Card>
-        <Card index={2} className="px-[18px] py-4">
+        <Card index={2} className="px-4 py-3.5">
           <Caps className="flex items-center gap-1.5">
             <span>Receivables outstanding</span>
             <LedgerDot />
           </Caps>
-          <div className="mt-1.5 font-display text-[25px] font-semibold tracking-[-0.5px] text-foreground">
+          <div className="mt-1 font-display text-[22px] font-semibold tracking-[-0.5px] text-foreground sm:text-[25px]">
             {money(ar)}
           </div>
           <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">From the books</div>
         </Card>
-        <Card index={3} className="px-[18px] py-4">
+        <Card index={3} className="px-4 py-3.5">
           <Caps className="flex items-center gap-1.5">
             <span>Overdue</span>
             <LedgerDot />
           </Caps>
-          <div className="mt-1.5 font-display text-[25px] font-semibold tracking-[-0.5px] text-foreground">
+          <div className="mt-1 font-display text-[22px] font-semibold tracking-[-0.5px] text-foreground sm:text-[25px]">
             {money(Number(overdue.total))}
           </div>
           <div className="mt-0.5 text-xs text-[var(--accent-warning)]">
@@ -182,19 +182,19 @@ export default async function DashboardPage() {
       </div>
 
       {/* Middle row */}
-      <div className="grid grid-cols-[3fr_2fr] gap-3.5">
-        <Card index={4} className="p-5">
+      <div className="grid grid-cols-[3fr_2fr] gap-3 max-xl:grid-cols-1">
+        <Card index={4} className="p-4">
           <div className="font-display text-[15px] font-semibold text-foreground">
             Pipeline by stage
           </div>
           <div className="mt-0.5 text-xs text-[var(--text-tertiary)]">
             Open value in each stage right now.
           </div>
-          <div className="mt-4 flex flex-col gap-3.5">
+          <div className="mt-3 flex flex-col gap-2.5">
             {openByStage.map((s) => (
               <div
                 key={s.stage}
-                className="grid grid-cols-[110px_minmax(0,1fr)_84px] items-center gap-3"
+                className="grid grid-cols-[110px_minmax(0,1fr)_84px] items-center gap-3 max-sm:grid-cols-[84px_minmax(0,1fr)_76px] max-sm:gap-2"
               >
                 <div className="text-[13px] text-muted-foreground">{s.stage}</div>
                 <div className="flex h-3">
@@ -211,7 +211,7 @@ export default async function DashboardPage() {
           </div>
         </Card>
 
-        <Card index={5} className="flex flex-col p-5">
+        <Card index={5} className="flex flex-col p-4">
           <div className="flex items-baseline justify-between">
             <div className="font-display text-[15px] font-semibold text-foreground">
               Due today
@@ -227,13 +227,13 @@ export default async function DashboardPage() {
                 className={`flex items-center gap-2.5 py-2 ${i < tasks.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
               >
                 <TaskCheckbox taskId={task.id} />
-                <span className="flex-1 text-[13px] text-foreground">{task.subject}</span>
+                <span className="min-w-[200px] flex-1 text-[13px] leading-snug text-foreground">{task.subject}</span>
                 {overdueTask(task.dueAt) ? (
-                  <span className="rounded-full bg-[color-mix(in_srgb,var(--accent-hot)_10%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-[#b91c1c]">
+                  <span className="shrink-0 rounded-full bg-[color-mix(in_srgb,var(--accent-hot)_10%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-[#b91c1c]">
                     Overdue
                   </span>
                 ) : (
-                  <span className="text-[11px] text-[var(--text-tertiary)]">
+                  <span className="shrink-0 text-[11px] text-[var(--text-tertiary)]">
                     {task.dueAt ? timeFmt.format(task.dueAt) : ""}
                   </span>
                 )}
@@ -247,7 +247,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* What the <span className="gradient-text-flow">books</span> are telling you */}
-      <Card index={6} className="p-5">
+      <Card index={6} className="p-4">
         <div className="font-display text-[15px] font-semibold text-foreground">
           What the <span className="gradient-text-flow">books</span> are telling you
         </div>
@@ -255,10 +255,10 @@ export default async function DashboardPage() {
           {riskCompanies.map((c) => (
             <div
               key={c.id}
-              className="flex items-center gap-3 border-b border-[var(--rule-soft)] py-2.5"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--rule-soft)] py-2.5"
             >
               <span className="size-2 shrink-0 rounded-full bg-[var(--accent-hot)]" />
-              <span className="flex-1 text-[13px] text-foreground">
+              <span className="min-w-[200px] flex-1 text-[13px] leading-snug text-foreground">
                 <strong className="font-semibold">{c.name}</strong> has {money(c.overdueCents)}{" "}
                 overdue in the books — and {money(Number(c.openDealTotal))} of open pipeline with
                 you. Settle one before pushing the other.
@@ -274,10 +274,10 @@ export default async function DashboardPage() {
           {quietDeals.map((d) => (
             <div
               key={d.id}
-              className="flex items-center gap-3 border-b border-[var(--rule-soft)] py-2.5"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--rule-soft)] py-2.5"
             >
               <span className="size-2 shrink-0 rounded-full bg-[var(--accent-warning)]" />
-              <span className="flex-1 text-[13px] text-foreground">
+              <span className="min-w-[200px] flex-1 text-[13px] leading-snug text-foreground">
                 <strong className="font-semibold">
                   {d.name}
                   {d.companyName ? ` — ${d.companyName}` : ""}
@@ -290,9 +290,9 @@ export default async function DashboardPage() {
             </div>
           ))}
           {goodNews.map((g, i) => (
-            <div key={i} className="flex items-center gap-3 py-2.5">
+            <div key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
               <span className="size-2 shrink-0 rounded-full bg-[var(--accent-data)]" />
-              <span className="flex-1 text-[13px] text-foreground">
+              <span className="min-w-[200px] flex-1 text-[13px] leading-snug text-foreground">
                 <strong className="font-semibold">{g.subject}</strong>
                 {g.body ? ` — ${g.body}` : ""} A good week to ask about the renewal.
               </span>

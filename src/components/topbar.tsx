@@ -19,9 +19,9 @@ export function Topbar({
   quickCreate?: React.ReactNode;
 }) {
   return (
-    <div className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between border-b border-border bg-[color-mix(in_srgb,var(--bg-primary)_88%,transparent)] px-8 backdrop-blur">
+    <div className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border bg-[color-mix(in_srgb,var(--bg-primary)_88%,transparent)] px-3.5 backdrop-blur sm:px-5 xl:px-7">
       <WorkspaceSwitcher workspaces={workspaces} activeId={activeWorkspaceId} />
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <GlobalSearch />
         {quickCreate}
         <div

@@ -3,7 +3,7 @@ import { requireTenant } from "@/lib/workspace";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { companies, contacts, db } from "@/db";
 import { money, relativeDay } from "@/lib/format";
-import { Avatar, Card, LedgerDot, Pill, StagePill } from "@/components/ui";
+import { Avatar, Card, LedgerDot, PageHeader, Pill, StagePill, TableScroll } from "@/components/ui";
 import { QuickCreate } from "@/components/quick-create";
 import { RecordActions } from "@/components/record-actions";
 import { ComposeEmail } from "@/components/compose-email";
@@ -79,26 +79,22 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
-            <span className="gradient-text-flow">Contacts</span>
-          </h1>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
-            {activeTag ? `${visible.length} tagged “${activeTag.name}” · of ${total} people` : `${total} people · ${customerCount} belong to paying customers in the books`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <a href="/api/export/contacts" download className={chip.replace("text-muted-foreground", "text-foreground")}>
-            <Download className="size-3.5" />
-            <span>Export CSV</span>
-          </a>
-          <ImportContacts className={chip.replace("text-muted-foreground", "text-foreground")} />
-          <QuickCreate companies={companyOptions} stages={[]} only="contact" buttonLabel="Add contact" />
-        </div>
-      </div>
+      <PageHeader
+        title="Contacts"
+        subtitle={activeTag ? `${visible.length} tagged “${activeTag.name}” · of ${total} people` : `${total} people · ${customerCount} belong to paying customers in the books`}
+        actions={
+          <>
+            <a href="/api/export/contacts" download className={chip.replace("text-muted-foreground", "text-foreground")}>
+              <Download className="size-3.5" />
+              <span>Export CSV</span>
+            </a>
+            <ImportContacts className={chip.replace("text-muted-foreground", "text-foreground")} />
+            <QuickCreate companies={companyOptions} stages={[]} only="contact" buttonLabel="Add contact" />
+          </>
+        }
+      />
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-1.5">
         <span className={`${chip} border-[color-mix(in_srgb,var(--accent-primary)_20%,transparent)] bg-[var(--tint-strong)] text-foreground`}>
           All <span className="text-[var(--text-tertiary)]">{total}</span>
         </span>
@@ -132,7 +128,8 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
       </div>
 
       <Card index={0} className="overflow-hidden">
-        <div className="grid h-10 grid-cols-[190px_150px_minmax(0,1fr)_100px_150px_56px_92px_92px_88px] items-center gap-3 border-b border-border bg-[image:var(--gradient-table-head)] px-4 text-[11px] font-semibold tracking-[0.05em] text-[var(--text-tertiary)] uppercase">
+        <TableScroll min={1180}>
+        <div className="grid h-9 grid-cols-[190px_150px_minmax(0,1fr)_100px_150px_56px_92px_92px_88px] items-center gap-3 border-b border-border bg-[image:var(--gradient-table-head)] px-4 text-[11px] font-semibold tracking-[0.05em] text-[var(--text-tertiary)] uppercase">
           <span>Name</span>
           <span>Company</span>
           <span>Email</span>
@@ -146,7 +143,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
         {visible.map((row, i) => (
           <div
             key={row.id}
-            className={`transition-colors hover:bg-[var(--tint)] grid h-[46px] grid-cols-[190px_150px_minmax(0,1fr)_100px_150px_56px_92px_92px_88px] items-center gap-3 px-4 text-[13px] ${i < visible.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
+            className={`transition-colors hover:bg-[var(--tint)] grid h-[42px] grid-cols-[190px_150px_minmax(0,1fr)_100px_150px_56px_92px_92px_88px] items-center gap-3 px-4 text-[13px] ${i < visible.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
           >
             <ContactRecordModal contact={row} defaultOpen={row.id === openContactId}>
               <Avatar name={`${row.firstName} ${row.lastName}`} />
@@ -211,7 +208,8 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
             </span>
           </div>
         ))}
-        <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-[var(--text-tertiary)]">
+        </TableScroll>
+        <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-xs text-[var(--text-tertiary)]">
           <span>
             Showing all {total} · <Pill kind="ledger">Owing comes from the books</Pill>
           </span>

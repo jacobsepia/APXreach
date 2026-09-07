@@ -4,7 +4,7 @@ import { activities, companies, db, deals, emailMessages, pipelineStages, synced
 import { requireTenant } from "@/lib/workspace";
 import { money } from "@/lib/format";
 import { agingBucket, agingLabels, bucketKeyFor, bucketsFor, compactMoney, delta, percent } from "@/lib/reports";
-import { Card, LedgerDot } from "@/components/ui";
+import { Card, LedgerDot, PageHeader } from "@/components/ui";
 import { BarList, ColumnChart, StatTile, chartColors } from "@/components/charts";
 
 /*
@@ -144,16 +144,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-[-0.035em]">
-            <span className="gradient-text-flow">Reports</span>
-          </h1>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
-            Pipeline, activity and the books, over the last {periodLabel}. Revenue and receivables come from the books, not the pipeline.
-          </p>
-        </div>
-        <div className="flex items-center gap-1 rounded-[10px] border border-input bg-white p-1" role="group" aria-label="Period">
+      <PageHeader
+        title="Reports"
+        subtitle={`Pipeline, activity and the books, over the last ${periodLabel}. Revenue and receivables come from the books, not the pipeline.`}
+        actions={
+          <div className="flex items-center gap-1 rounded-[10px] border border-input bg-white p-1" role="group" aria-label="Period">
           {ranges.map((item) => (
             <Link
               key={item.days}
@@ -164,8 +159,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               {item.label}
             </Link>
           ))}
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       <div className="grid grid-cols-4 gap-3 max-lg:grid-cols-2">
         <Card index={0}><StatTile label={`Won · ${periodLabel}`} value={money(wonTotal)} delta={{ ...delta(wonTotal, wonTotalBefore) }} note={`${wonNow.length} ${wonNow.length === 1 ? "deal" : "deals"} closed`} /></Card>
@@ -174,9 +170,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <Card index={3}><StatTile label="Activities logged" value={String(activityNow)} delta={{ ...delta(activityNow, activityBefore) }} note="calls, meetings, notes" /></Card>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 max-lg:grid-cols-1">
-        <Card index={4} className="p-5">
-          <div className="mb-3 flex items-baseline justify-between">
+      <div className="grid grid-cols-2 gap-3 max-xl:grid-cols-1">
+        <Card index={4} className="p-4">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
             <div className="font-display text-[15px] font-semibold text-foreground">Won and lost</div>
             <span className="text-xs text-[var(--text-tertiary)]">by {days > 120 ? "month" : "week"}</span>
           </div>
@@ -188,16 +184,16 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           />
         </Card>
 
-        <Card index={5} className="p-5">
-          <div className="mb-3 flex items-baseline justify-between">
+        <Card index={5} className="p-4">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
             <div className="font-display text-[15px] font-semibold text-foreground">Open pipeline by stage</div>
             <span className="text-xs text-[var(--text-tertiary)]">{money(openTotal)} open · {money(Math.round(weighted))} weighted</span>
           </div>
           <BarList rows={pipelineRows} format={compactMoney} emptyText="No open deals. Add one from a company page or the New button." />
         </Card>
 
-        <Card index={6} className="p-5">
-          <div className="mb-3 flex items-baseline justify-between">
+        <Card index={6} className="p-4">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
             <div className="font-display text-[15px] font-semibold text-foreground">Email sent and received</div>
             <span className="text-xs text-[var(--text-tertiary)]">through connected mailboxes</span>
           </div>
@@ -209,8 +205,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           />
         </Card>
 
-        <Card index={7} className="p-5">
-          <div className="mb-3 flex items-baseline justify-between">
+        <Card index={7} className="p-4">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
             <div className="font-display text-[15px] font-semibold text-foreground">Activity</div>
             <span className="text-xs text-[var(--text-tertiary)]">calls, meetings, notes and logged emails</span>
           </div>
@@ -227,16 +223,16 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           )}
         </Card>
 
-        <Card index={8} className="p-5">
-          <div className="mb-3 flex items-baseline justify-between">
+        <Card index={8} className="p-4">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
             <div className="flex items-center gap-1.5 font-display text-[15px] font-semibold text-foreground"><span>Receivables aging</span><LedgerDot /></div>
             <span className="text-xs text-[var(--text-tertiary)]">{money(owed)} owed · {money(overdue)} overdue · as of today</span>
           </div>
           <BarList rows={agingRows} format={compactMoney} emptyText="Nothing outstanding in the books. Connect and sync your books in Settings to see receivables here." />
         </Card>
 
-        <Card index={9} className="p-5">
-          <div className="mb-3 flex items-baseline justify-between">
+        <Card index={9} className="p-4">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
             <div className="flex items-center gap-1.5 font-display text-[15px] font-semibold text-foreground"><span>Revenue this year by customer</span><LedgerDot /></div>
             <span className="text-xs text-[var(--text-tertiary)]">invoiced, from the books</span>
           </div>

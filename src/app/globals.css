@@ -418,6 +418,21 @@
     }
   }
 
+  /*
+   * A table too wide for the screen scrolls inside its own box. This is the
+   * cue that it does: a soft shadow on whichever edge still has content past
+   * it, and none once you reach that end. The white pairs travel with the
+   * content (background-attachment:local) and cover the shadows at the ends,
+   * so it needs no script and no scroll listener.
+   */
+  .scroll-x-cue {
+    background:
+      linear-gradient(to right, #fff 32%, rgba(255, 255, 255, 0)) left center / 26px 100% no-repeat local,
+      linear-gradient(to left, #fff 32%, rgba(255, 255, 255, 0)) right center / 26px 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%, rgba(21, 24, 28, 0.13), rgba(21, 24, 28, 0)) left center / 13px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, rgba(21, 24, 28, 0.13), rgba(21, 24, 28, 0)) right center / 13px 100% no-repeat scroll;
+  }
+
   
   .apx-hover {
     transition:
