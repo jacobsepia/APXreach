@@ -375,3 +375,25 @@ export const workspaceInvites = pgTable("workspace_invites", {
   acceptedBy: text("accepted_by"),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
+
+/*
+ * Tags: the loose grouping a CRM needs before it has a query language.
+ * "Newsletter", "VIP", "Dormant" — a person can carry several, and a
+ * campaign or a sequence targets one. Names are unique per workspace,
+ * case-insensitively, so "VIP" and "vip" are the same tag.
+ */
+export const tags = pgTable("tags", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
+  name: text("name").notNull(),
+  /** One of a small fixed set, so a workspace's tags stay legible together. */
+  color: text("color").default("plum").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const contactTags = pgTable("contact_tags", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  contactId: uuid("contact_id").references(() => contacts.id).notNull(),
+  tagId: uuid("tag_id").references(() => tags.id).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [uniqueIndex("contact_tags_contact_tag_idx").on(table.contactId, table.tagId)]);

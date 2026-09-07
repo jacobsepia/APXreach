@@ -10,16 +10,18 @@ import { ComposeEmail } from "@/components/compose-email";
 import { ContactRecordModal } from "@/components/contact-record-modal";
 import { ImportContacts } from "@/components/import-contacts";
 import { duplicateCompanies, duplicateContacts } from "@/lib/duplicates";
+import { tagsForContacts, workspaceTags } from "@/lib/tags";
+import { ContactTags } from "@/components/contact-tags";
 import { Download } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Contacts" };
 
-export default async function ContactsPage({ searchParams }: { searchParams: Promise<{ open?: string }> }) {
-  const { open: openContactId } = await searchParams;
+export default async function ContactsPage({ searchParams }: { searchParams: Promise<{ open?: string; tag?: string }> }) {
+  const { open: openContactId, tag: tagFilter } = await searchParams;
   const { workspaceId } = await requireTenant();
-  const [rows, stageCounts, overdueAccounts, companyOptions, dupPeople, dupFirms] = await Promise.all([
+  const [rows, stageCounts, overdueAccounts, companyOptions, dupPeople, dupFirms, allTags] = await Promise.all([
     db
       .select({
         id: contacts.id,
@@ -57,7 +59,13 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
       .orderBy(companies.name),
     duplicateContacts(workspaceId),
     duplicateCompanies(workspaceId),
+    workspaceTags(workspaceId),
   ]);
+  const tagsByContact = await tagsForContacts(workspaceId, rows.map((row) => row.id));
+  /* A tag chip narrows the list; everything below counts the whole workspace. */
+  const visible = tagFilter ? rows.filter((row) => (tagsByContact.get(row.id) ?? []).some((tag) => tag.id === tagFilter)) : rows;
+  const activeTag = allTags.find((tag) => tag.id === tagFilter) ?? null;
+  const tagChips = allTags.map((tag) => ({ id: tag.id, name: tag.name, color: tag.color }));
   const duplicateGroups = dupPeople.length + dupFirms.length;
 
   const countOf = (stage: string) =>
@@ -77,7 +85,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
             <span className="gradient-text-flow">Contacts</span>
           </h1>
           <p className="mt-0.5 text-[13px] text-muted-foreground">
-            {total} people · {customerCount} belong to paying customers in the books
+            {activeTag ? `${visible.length} tagged “${activeTag.name}” · of ${total} people` : `${total} people · ${customerCount} belong to paying customers in the books`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -106,6 +114,16 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
         <span className={`${chip} border-[color-mix(in_srgb,var(--accent-warning)_35%,transparent)] text-[#b45309]`}>
           Overdue accounts <span>{overdueCount}</span>
         </span>
+        {allTags.length > 0 && <span className="mx-1 h-5 w-px bg-[var(--rule-soft)]" aria-hidden />}
+        {allTags.map((tag) => (
+          <Link
+            key={tag.id}
+            href={tag.id === tagFilter ? "/contacts" : `/contacts?tag=${tag.id}`}
+            className={`${chip} ${tag.id === tagFilter ? "border-[color-mix(in_srgb,var(--accent-primary)_35%,transparent)] bg-[var(--tint-strong)] text-foreground" : "hover:text-foreground"}`}
+          >
+            {tag.name} <span className="text-[var(--text-tertiary)]">{tag.count}</span>
+          </Link>
+        ))}
         {duplicateGroups > 0 && (
           <Link href="/contacts/duplicates" className={`${chip} ml-auto border-[color-mix(in_srgb,var(--accent-hot)_35%,transparent)] text-[#b91c1c] hover:bg-white`}>
             {duplicateGroups} possible {duplicateGroups === 1 ? "duplicate" : "duplicates"} · review
@@ -114,20 +132,21 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
       </div>
 
       <Card index={0} className="overflow-hidden">
-        <div className="grid h-10 grid-cols-[220px_180px_minmax(0,1fr)_110px_60px_100px_100px_96px] items-center gap-3 border-b border-border bg-[image:var(--gradient-table-head)] px-4 text-[11px] font-semibold tracking-[0.05em] text-[var(--text-tertiary)] uppercase">
+        <div className="grid h-10 grid-cols-[190px_150px_minmax(0,1fr)_100px_150px_56px_92px_92px_88px] items-center gap-3 border-b border-border bg-[image:var(--gradient-table-head)] px-4 text-[11px] font-semibold tracking-[0.05em] text-[var(--text-tertiary)] uppercase">
           <span>Name</span>
           <span>Company</span>
           <span>Email</span>
           <span>Stage</span>
+          <span>Tags</span>
           <span>Owner</span>
           <span className="text-right">Owing</span>
           <span className="text-right">Last activity</span>
           <span className="sr-only">Actions</span>
         </div>
-        {rows.map((row, i) => (
+        {visible.map((row, i) => (
           <div
             key={row.id}
-            className={`transition-colors hover:bg-[var(--tint)] grid h-[46px] grid-cols-[220px_180px_minmax(0,1fr)_110px_60px_100px_100px_96px] items-center gap-3 px-4 text-[13px] ${i < rows.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
+            className={`transition-colors hover:bg-[var(--tint)] grid h-[46px] grid-cols-[190px_150px_minmax(0,1fr)_100px_150px_56px_92px_92px_88px] items-center gap-3 px-4 text-[13px] ${i < visible.length - 1 ? "border-b border-[var(--rule-soft)]" : ""}`}
           >
             <ContactRecordModal contact={row} defaultOpen={row.id === openContactId}>
               <Avatar name={`${row.firstName} ${row.lastName}`} />
@@ -147,6 +166,9 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
             <span className="truncate text-muted-foreground">{row.email ?? "—"}</span>
             <span>
               <StagePill stage={row.lifecycleStage} />
+            </span>
+            <span className="min-w-0">
+              <ContactTags contactId={row.id} tags={tagsByContact.get(row.id) ?? []} suggestions={tagChips} />
             </span>
             <span>{row.ownerName ? <Avatar name={row.ownerName} className="size-6" /> : "—"}</span>
             <span className="flex items-center justify-end gap-1.5 text-right">
