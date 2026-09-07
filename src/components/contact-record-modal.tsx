@@ -10,6 +10,7 @@ import { loadContactRecord } from "@/lib/contact-record";
 import { sendEmailFromRecord } from "@/lib/actions";
 import { rewriteEmailTone } from "@/lib/email-tone-actions";
 import { saveDraftAsTemplate } from "@/lib/email-template-actions";
+import { resubscribeContact } from "@/lib/campaigns/actions";
 import { toneList, tones, type Tone } from "@/lib/email-tone-list";
 import { money, relativeDay, shortDate } from "@/lib/format";
 import { StagePill } from "@/components/ui";
@@ -117,6 +118,7 @@ export function ContactRecordModal({ contact, children, initialView = "activity"
   /* Files to send along. Held in memory until Send; nothing is uploaded early. */
   const [attachments, setAttachments] = useState<File[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
+  const [resubscribing, setResubscribing] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -318,6 +320,18 @@ export function ContactRecordModal({ contact, children, initialView = "activity"
                   <div className={styles.property}><span>Email address</span>{contact.email ? <button type="button" onClick={compose} className={styles.emailLink} disabled={sending}>{contact.email}<ArrowUpRight size={13} /></button> : <strong>Not provided</strong>}</div>
                   <div className={styles.property}><span>Phone number</span>{contact.phone ? <a href={"tel:" + contact.phone}>{contact.phone}</a> : <strong>Not provided</strong>}</div>
                   <div className={styles.property}><span>Job title</span><strong>{contact.title || "Not provided"}</strong></div>
+                  {data && <div className={styles.property}><span>Campaigns</span>
+                    {data.unsubscribedAt ? <strong className={styles.warning}>
+                      Unsubscribed {shortDate(new Date(data.unsubscribedAt))}
+                      <button type="button" className={styles.linkButton} disabled={resubscribing} onClick={async () => {
+                        setResubscribing(true);
+                        const form = new FormData(); form.set("contactId", contact.id);
+                        try { await resubscribeContact(form); setData({ ...data, unsubscribedAt: null }); }
+                        catch { /* the record simply keeps saying unsubscribed */ }
+                        finally { setResubscribing(false); }
+                      }}>{resubscribing ? "Resubscribing…" : "Resubscribe"}</button>
+                    </strong> : <strong>Subscribed</strong>}
+                  </div>}
                   <div className={styles.owner}><span className={styles.ownerAvatar}><UserRound size={15} /></span><div><span>Contact owner</span><strong>{contact.ownerName || "Unassigned"}</strong></div></div>
                 </section>
 

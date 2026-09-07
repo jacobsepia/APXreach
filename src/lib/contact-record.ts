@@ -16,7 +16,7 @@ export async function loadContactRecord(rawId: string) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) throw new Error("Sign in again to view this contact.");
   const { workspaceId, workspaceName, userName } = await requireTenantOrThrow();
-  const [contact] = await db.select({ id: contacts.id }).from(contacts)
+  const [contact] = await db.select({ id: contacts.id, unsubscribedAt: contacts.unsubscribedAt }).from(contacts)
     .where(and(eq(contacts.id, id), eq(contacts.workspaceId, workspaceId))).limit(1);
   if (!contact) throw new Error("Contact unavailable.");
   const [history, associatedDeals, messages, connectedMailboxes, templates] = await Promise.all([
@@ -51,6 +51,9 @@ export async function loadContactRecord(rawId: string) {
     activities: history, deals: associatedDeals,
     messages: messages.map(message => ({ ...message, bodyHtml: message.bodyHtml ? sanitizeEmailHtml(message.bodyHtml) : null })),
     mailbox: connectedMailboxes[0] ?? null, templates,
+    /* When they opted out of marketing email. One-to-one mail from this record
+       is not marketing and is never blocked by it — the record just says so. */
+    unsubscribedAt: contact.unsubscribedAt,
     signature: emailSignature(userName, workspaceName, connectedMailboxes[0]?.emailAddress ?? ""),
     /* Whether the tone pills can do anything. The key itself never leaves the server. */
     rewriteReady: Boolean(process.env.OPENAI_API_KEY?.trim()),

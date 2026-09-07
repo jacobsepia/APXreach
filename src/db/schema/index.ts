@@ -95,6 +95,13 @@ export const contacts = pgTable("contacts", {
   ownerName: text("owner_name"),
   externalContactId: text("external_contact_id"),
   lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
+  /**
+   * When they asked to stop receiving marketing mail. CASL makes this the
+   * business's obligation, not the sender's convenience: once set, no
+   * campaign reaches them again. One-to-one mail from a record is a
+   * different thing and is not covered by it.
+   */
+  unsubscribedAt: timestamp("unsubscribed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -404,3 +411,50 @@ export const contactTags = pgTable("contact_tags", {
   tagId: uuid("tag_id").references(() => tags.id).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [uniqueIndex("contact_tags_contact_tag_idx").on(table.contactId, table.tagId)]);
+
+/*
+ * Campaigns: one email to a list, through a sending service rather than a
+ * person's own mailbox — bulk mail and an invoice must never share a
+ * sending reputation.
+ *
+ * The rule that makes this different from every other marketing tool: an
+ * account in active dunning is held out of every send. Chasing somebody for
+ * an overdue invoice on Tuesday and offering them a discount on Wednesday
+ * is how a small business loses a customer, and only a CRM that can see the
+ * books can prevent it.
+ */
+export const campaigns = pgTable("campaigns", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  bodyHtml: text("body_html").notNull(),
+  /** Who it goes to: everyone carrying this tag. */
+  tagId: uuid("tag_id").references(() => tags.id),
+  fromName: text("from_name").notNull(),
+  fromEmail: text("from_email").notNull(),
+  replyTo: text("reply_to"),
+  status: text("status").default("draft").notNull(), // draft | sending | sent | failed
+  /** Whether accounts with an overdue balance are held back. On, always, unless deliberately turned off. */
+  holdDunning: boolean("hold_dunning").default(true).notNull(),
+  sentCount: integer("sent_count").default(0).notNull(),
+  failedCount: integer("failed_count").default(0).notNull(),
+  heldCount: integer("held_count").default(0).notNull(),
+  lastError: text("last_error"),
+  createdBy: text("created_by"),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const campaignRecipients = pgTable("campaign_recipients", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  campaignId: uuid("campaign_id").references(() => campaigns.id).notNull(),
+  contactId: uuid("contact_id").references(() => contacts.id).notNull(),
+  email: text("email").notNull(),
+  status: text("status").default("pending").notNull(), // pending | sent | failed | held
+  /** Why a person was held back, in the words the campaign page shows. */
+  reason: text("reason"),
+  providerMessageId: text("provider_message_id"),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+}, (table) => [uniqueIndex("campaign_recipients_campaign_contact_idx").on(table.campaignId, table.contactId)]);

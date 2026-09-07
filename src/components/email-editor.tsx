@@ -9,7 +9,9 @@ import { AlignCenter, AlignLeft, AlignRight, Bold, Italic, List, ListOrdered, Re
 import styles from "./contact-record-modal.module.css";
 import { templateTags } from "@/lib/email-templates";
 
-type Props = { value: string; disabled: boolean; firstName: string; onChange: (html: string, text: string) => void; toolbarEnd?: React.ReactNode; belowToolbar?: React.ReactNode; allowTags?: boolean };
+type Props = { value: string; disabled: boolean; firstName: string; onChange: (html: string, text: string) => void; toolbarEnd?: React.ReactNode; belowToolbar?: React.ReactNode; allowTags?: boolean;
+  /** Overrides the "Hi {firstName}," ghost line, for a draft that has no one recipient. */
+  placeholder?: string };
 const fonts = ["Arial", "Verdana", "Georgia", "Tahoma", "Times New Roman", "Courier New"];
 const sizes = [10, 12, 14, 16, 18, 20, 24, 28, 32];
 const readEditorState = (current: Editor) => ({
@@ -20,7 +22,7 @@ const readEditorState = (current: Editor) => ({
   undo: current.can().undo(), redo: current.can().redo(), empty: current.isEmpty,
 });
 
-export default function EmailEditor({ value, disabled, firstName, onChange, toolbarEnd, belowToolbar, allowTags }: Props) {
+export default function EmailEditor({ value, disabled, firstName, onChange, toolbarEnd, belowToolbar, allowTags, placeholder }: Props) {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -73,7 +75,7 @@ export default function EmailEditor({ value, disabled, firstName, onChange, tool
     </div>
     {belowToolbar}
     <div className={styles.editorSurface}>
-      {state.empty && <span className={styles.editorPlaceholder}>Hi {firstName},</span>}
+      {state.empty && <span className={styles.editorPlaceholder}>{placeholder ?? `Hi ${firstName},`}</span>}
       <EditorContent editor={editor} className={styles.editorMount} />
     </div>
   </div>;
