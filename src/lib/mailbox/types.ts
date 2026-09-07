@@ -121,4 +121,16 @@ export interface MailboxProvider {
     mailbox: { emailAddress: string; providerAccountId: string | null },
     providerRef: string,
   ): Promise<ProviderResult<{ bodyText: string | null; bodyHtml: string | null }>>;
+  /**
+   * What came attached to a received message — names, sizes and types, never
+   * the bytes. The files stay in the person's own mailbox, which is where
+   * they can already open them; Reach records that they exist so the Inbox
+   * and the contact's history say so. Called only for mail that matched a
+   * contact, like fetchBody.
+   */
+  fetchAttachments?(
+    accessToken: string,
+    mailbox: { emailAddress: string; providerAccountId: string | null },
+    providerRef: string,
+  ): Promise<ProviderResult<Array<{ name: string; size: number; type: string }>>>;
 }

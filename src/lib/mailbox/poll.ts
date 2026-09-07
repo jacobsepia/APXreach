@@ -119,6 +119,14 @@ export async function pollMailbox(mailbox: MailboxRow): Promise<PollOutcome> {
     }
     const text = bodyText ?? message.snippet;
 
+    /* What came attached, by name and size. The files stay in the person's
+       own mailbox; this is so the record says they exist. */
+    let attachments: Array<{ name: string; size: number; type: string }> = [];
+    if (provider.fetchAttachments) {
+      const listed = await provider.fetchAttachments(token.value, mailbox, message.providerRef);
+      if (listed.ok) attachments = listed.value;
+    }
+
     await db.insert(emailMessages).values({
       workspaceId: mailbox.workspaceId,
       mailboxId: mailbox.id,
@@ -131,6 +139,7 @@ export async function pollMailbox(mailbox: MailboxRow): Promise<PollOutcome> {
       bodyText: text,
       bodyHtml,
       providerMessageId: message.providerMessageId,
+      attachments: attachments.length ? attachments : null,
       threadKey: threadKeyFor(message.subject, contact.id, message.fromAddress),
       sentAt: message.receivedAt,
     });

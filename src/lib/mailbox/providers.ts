@@ -254,6 +254,46 @@ export function htmlToText(html: string): string {
     .trim();
 }
 
+
+/*
+ * Attachment metadata, read leniently. Graph names the fields plainly;
+ * Zoho's attachment listing is thinner and its field names vary by
+ * endpoint version, so several spellings are accepted and anything
+ * unreadable is logged rather than failing the poll — a message whose
+ * files could not be listed is still a message worth keeping.
+ */
+const attachmentRowSchema = z
+  .object({
+    name: z.string().optional(),
+    attachmentName: z.string().optional(),
+    fileName: z.string().optional(),
+    size: z.union([z.number(), z.string()]).optional(),
+    attachmentSize: z.union([z.number(), z.string()]).optional(),
+    contentType: z.string().optional(),
+    attachmentType: z.string().optional(),
+  })
+  .passthrough();
+
+function readAttachmentRows(rows: unknown[], label: string): Array<{ name: string; size: number; type: string }> {
+  const files: Array<{ name: string; size: number; type: string }> = [];
+  for (const row of rows) {
+    const parsed = attachmentRowSchema.safeParse(row);
+    if (!parsed.success) {
+      console.error(`[mailbox] ${label} attachment shape:`, JSON.stringify(row).slice(0, 300));
+      continue;
+    }
+    const name = parsed.data.name ?? parsed.data.attachmentName ?? parsed.data.fileName;
+    if (!name) continue;
+    const rawSize = parsed.data.size ?? parsed.data.attachmentSize ?? 0;
+    files.push({
+      name,
+      size: Math.max(0, Math.round(Number(rawSize) || 0)),
+      type: parsed.data.contentType ?? parsed.data.attachmentType ?? "application/octet-stream",
+    });
+  }
+  return files;
+}
+
 /** "Jane Doe <jane@x.ca>" or "jane@x.ca" → the address, lower-cased. */
 function bareAddress(value: string): string {
   const angled = value.match(/<([^>]+)>/);
@@ -518,6 +558,22 @@ export const zohoMailbox: MailboxProvider = {
     return { ok: true, value: { messages, cursor: JSON.stringify(next) } };
   },
 
+  async fetchAttachments(accessToken, mailbox, providerRef) {
+    if (!mailbox.providerAccountId) {
+      return { ok: false, error: "Reconnect the Zoho mailbox — its account id is missing." };
+    }
+    const [folderId, messageId] = providerRef.split("/");
+    const result = await getJson(
+      `${ZOHO_MAIL_API}/api/accounts/${mailbox.providerAccountId}/folders/${folderId}/messages/${messageId}/attachmentinfo`,
+      accessToken,
+      "Zoho Mail",
+      "Zoho-oauthtoken",
+    );
+    if (!result.ok) return result;
+    const body = (result.value as { data?: { attachments?: unknown } })?.data?.attachments;
+    return { ok: true, value: Array.isArray(body) ? readAttachmentRows(body, "zoho") : [] };
+  },
+
   async fetchBody(accessToken, mailbox, providerRef) {
     if (!mailbox.providerAccountId) {
       return { ok: false, error: "Reconnect the Zoho mailbox — its account id is missing." };
@@ -772,6 +828,17 @@ export const microsoftMailbox: MailboxProvider = {
     messages.sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime());
     const next: GraphCursor = { since: newest };
     return { ok: true, value: { messages, cursor: JSON.stringify(next) } };
+  },
+
+  async fetchAttachments(accessToken, _mailbox, providerRef) {
+    const result = await getJson(
+      `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(providerRef)}/attachments?$select=name,size,contentType`,
+      accessToken,
+      "Outlook",
+    );
+    if (!result.ok) return result;
+    const body = (result.value as { value?: unknown })?.value;
+    return { ok: true, value: Array.isArray(body) ? readAttachmentRows(body, "graph") : [] };
   },
 };
 
