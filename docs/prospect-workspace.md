@@ -8,23 +8,26 @@ This release starts the prospecting build on `7ee964b`, preserving the deployed 
 - File-hash repeat-import protection. Revised files remain separate research batches; this release does not silently merge or overwrite research across workbook versions.
 - Active, fit-5, research, microbusiness, follow-up and excluded views; search, source-list filtering and 50-row pagination.
 - Research detail, original values, editable fit/rationale, review notes, status, owner and dated next action.
-- Explicit company linking/creation, with unique case-insensitive name or domain matching. Multiple matches are blocked for review. No customer or Ledger fields are overwritten. Primary contact names remain intact rather than guessing surname boundaries.
+- Automatic CRM sync after import, plus a bulk preview/sync action for previously imported rows. Unique case-insensitive company names and normalized website domains are matched; duplicates within one workbook share a company. Existing customer and Ledger fields are never overwritten.
+- A business qualifies for sync when it has a real company name, is not marked disqualified/duplicate, has no explicit identity warning, and has an unambiguous company match. Fit scores remain priorities, not a cutoff or a sales stage. Conflicting websites and multiple CRM matches are held for review.
+- Named primary contacts and explicitly named finance leads are added. Unknown, incomplete, or role-only finance entries remain research. Full names and credentials remain intact rather than guessing surname boundaries. Company/name matching prevents duplicate contacts on repeat runs.
+- Every sync previews or applies a plan based on current workspace data. Writes use one serializable transaction, a workspace lock, and a snapshot fingerprint. Stale/concurrent plans are recomputed rather than partially applied. Import and sync have separate outcomes: an imported workbook remains available if CRM sync needs a retry.
 - Linked research on the company page and explicit creation/update of a follow-up in Tasks. Repeated clicks do not duplicate the task; completed tasks are not reopened.
-- No automatic email, sequence enrollment, finance-contact creation or deal creation.
+- No automatic email, sequence enrollment or deal creation.
 
 ## Deployment
 
 1. Run `npm run build` and `node --import tsx scripts/test-prospect-workbook.ts [optional workbook path]`.
 2. With database-admin credentials available locally, run `node --env-file=.env scripts/test-workspaces.mjs`. It creates and removes only its uniquely named disposable database; it never imports into the live workspace or sends mail.
 3. Apply `node --env-file=.env scripts/migrate-prospects.mjs` to the intended database **before** deploying the new app. The company detail page reads the new research table.
-4. Deploy the reviewed branch. Open Prospects, preview the workbook, then import into the selected workspace.
+4. Deploy the reviewed branch. Open Prospects, preview the workbook, then import into the selected workspace. Import automatically syncs eligible companies and contacts. Existing imports can be synced from **Sync qualified records to CRM → Sync now** after reviewing the preview.
 5. Check 430 Ranked Prospects + 179 Microbusinesses + 47 Skipped = 656 source rows for the v5 workbook. These are research rows, not unique companies. Re-importing the identical file should add zero rows.
 
 Rollback the app by redeploying the previous version. Leave the additive prospect tables in place to preserve research. No destructive rollback script is supplied.
 
 ## Following increments
 
-This is the foundation, not the entire platform plan. Next: explicit multi-candidate merge resolution, import history and reversible batch handling, normalized service pricing and employee ranges, structured dated evidence, contact enrichment, configurable scoring, saved custom filters, and source-to-revenue reporting. Finance leads and list names are preserved in research but are not yet separate linked entities. Next actions can be sent to Tasks explicitly; they are not silently rescheduled after every research edit.
+This is the foundation, not the entire platform plan. Next: explicit multi-candidate merge resolution, import history and reversible batch handling, normalized service pricing and employee ranges, structured dated evidence, contact enrichment, configurable scoring, saved custom filters, and source-to-revenue reporting. List names remain research fields. Next actions can be sent to Tasks explicitly; they are not silently rescheduled after every research edit.
 
 The workbook is treated as data. Its statements are unverified research, not instructions or confirmed facts. “None found” is displayed as no finance lead found in research.
 

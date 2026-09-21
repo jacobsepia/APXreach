@@ -23,10 +23,16 @@ export function ProspectImport() {
       else if (result.preview) setRows(result.preview);
       else {
         setRows(null);
+        const sync = "syncSummary" in result ? result.syncSummary : undefined;
         setMessage(
-          result.count
-            ? `${result.count} source rows preserved. Open the prospect queue to review them.`
-            : "This exact workbook was already imported. No duplicate rows were created.",
+          (result.count
+            ? `${result.count} source rows preserved. `
+            : "This workbook was already imported. ") +
+            ("syncError" in result && result.syncError
+              ? result.syncError
+              : sync
+                ? `${sync.companiesCreated} companies created, ${sync.contactsCreated} contacts added, ${sync.recordsLinked} research records linked. ${sync.held.length} records need review. See Sync qualified records to CRM for details.`
+                : ""),
         );
         router.refresh();
       }
@@ -42,8 +48,8 @@ export function ProspectImport() {
         <h2 className="font-semibold">Bring your research into Reach</h2>
         <p className="text-muted-foreground mt-1">
           Import the APX prospect workbook (.xlsx, up to 3 MB). All columns and
-          source rows are retained. Companies, deals, and emails are created
-          only through later actions.
+          source rows are retained. Eligible companies and named contacts sync
+          automatically. Skipped records and ambiguous matches stay in review.
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
@@ -81,8 +87,9 @@ export function ProspectImport() {
               .join(" · ")}
           </p>
           <p className="text-muted-foreground">
-            Rows remain separate until reviewed. No company matches or
-            exclusions are applied to your existing CRM records.
+            Importing also creates or matches eligible companies and adds named
+            contacts. Existing CRM details are preserved. No deals or emails are
+            created.
           </p>
           <div className="max-h-64 overflow-auto">
             <table className="w-full text-left text-xs">
@@ -113,7 +120,7 @@ export function ProspectImport() {
             onClick={() => run("import")}
             className="rounded-lg bg-[var(--accent-primary)] text-white px-4 py-2 disabled:opacity-50"
           >
-            Preserve {rows.length} rows in review queue
+            Import {rows.length} rows and sync CRM
           </button>
         </div>
       )}

@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, prospects } from "@/db";
 import { requireTenant } from "@/lib/workspace";
 import { ProspectImport } from "@/components/prospect-import";
+import { ProspectSync } from "@/components/prospect-sync";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Prospects" };
 export default async function ProspectsPage({
@@ -92,6 +93,7 @@ export default async function ProspectsPage({
         </p>
       </div>
       <ProspectImport />
+      <ProspectSync />
       <nav aria-label="Prospect views" className="flex flex-wrap gap-2">
         {views.map(([key, label]) => (
           <Link

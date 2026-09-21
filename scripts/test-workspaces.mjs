@@ -229,15 +229,16 @@ try {
   for(let i=0;i<2;i++) ok(await action("uploadProspects", a.cookie, { file: new File([blob], "prospects.xlsx"), mode: "import" }, "/prospects"), "prospect import");
   assert.equal(Number((await query`SELECT count(*) FROM prospects WHERE workspace_id=${a.workspace}`)[0].count), 2);
   assert.equal(Number((await query`SELECT count(*) FROM prospect_imports WHERE workspace_id=${a.workspace}`)[0].count), 1);
-  assert.equal(Number((await query`SELECT count(*) FROM companies`)[0].count), 2);
+  assert.equal(Number((await query`SELECT count(*) FROM companies`)[0].count), 3, "eligible import automatically creates a company");
   const [prospect] = await query`SELECT * FROM prospects WHERE data->>'company'='PROSPECT_ALPHA' AND workspace_id=${a.workspace}`;
+  assert.ok(prospect.company_id, "import links research to CRM automatically");
   assert.equal(prospect.raw["Custom evidence"], "Retain this");
   assert.ok(!(await request("/prospects", b.cookie)).text.includes("PROSPECT_ALPHA"));
   assert.equal((await request("/prospects/" + prospect.id, b.cookie)).status, 404);
   await action("updateProspect", b.cookie, { id:prospect.id, status:"qualified", fit:"2" }, "/prospects");
   assert.equal((await query`SELECT status FROM prospects WHERE id=${prospect.id}`)[0].status, "research");
   await action("linkProspect", b.cookie, { id:prospect.id }, "/prospects");
-  assert.equal((await query`SELECT company_id FROM prospects WHERE id=${prospect.id}`)[0].company_id, null);
+  assert.equal((await query`SELECT company_id FROM prospects WHERE id=${prospect.id}`)[0].company_id, prospect.company_id);
   ok(await action("updateProspect", a.cookie, { id:prospect.id, status:"ready", fit:"4", rationale:"Reviewed fit", nextAction:"Research email", nextActionDate:"2026-10-01" }, "/prospects"), "review prospect");
   assert.equal((await query`SELECT data->>'fit' AS fit FROM prospects WHERE id=${prospect.id}`)[0].fit, "4");
   assert.equal((await query`SELECT raw->>'Fit' AS fit FROM prospects WHERE id=${prospect.id}`)[0].fit, "5");
@@ -250,6 +251,33 @@ try {
   await action("linkProspect", a.cookie, { id:excluded.id }, "/prospects");
   assert.equal(Number((await query`SELECT count(*) FROM companies WHERE name='EXCLUDED_ALPHA'`)[0].count), 0);
   passed("prospect preview, repeat import, raw preservation, review, promotion and workspace isolation");
+  await query`INSERT INTO companies(workspace_id,name,domain,lifecycle_stage,revenue_ytd_cents) VALUES
+    (${a.workspace},'SecondCo','https://www.second.test/about','customer',12345),
+    (${a.workspace},'ConflictCo',NULL,'lead',0),(${a.workspace},'ConflictCo',NULL,'lead',0)`;
+  let sourceRow = 100;
+  for (const [name,domain,status] of [['SecondCo','second.test','research'],['SecondCo','second.test','research'],['Brand New','brandnew.test','research'],['Brand New','brandnew.test','research'],['ConflictCo',null,'research'],['Excluded new',null,'disqualified']]) {
+    const data = {...prospect.data,company:name,domain,contact:'Taylor Person',financeLead:'CFO: Morgan Finance',flag:null,financeNotes:null};
+    await query`INSERT INTO prospects(workspace_id,import_id,source_sheet,source_row,raw,data,status)
+      VALUES(${a.workspace},${prospect.import_id},'Sync fixtures',${sourceRow++},${JSON.stringify({Company:name})}::jsonb,${JSON.stringify(data)}::jsonb,${status})`;
+  }
+  const beforeBulk=Number((await query`SELECT count(*) FROM companies`)[0].count);
+  const preview=await action('syncQualifiedProspects',a.cookie,'preview','/prospects'); ok(preview,'bulk preview');
+  assert.ok(preview.text.includes('Multiple CRM companies match'));
+  assert.equal(Number((await query`SELECT count(*) FROM companies`)[0].count),beforeBulk);
+  for(const result of await Promise.all([1,2].map(()=>action('syncQualifiedProspects',a.cookie,'sync','/prospects')))) {
+    ok(result,'concurrent bulk sync'); assert.ok(result.text.includes('"ok":true'),result.text.slice(0,500));
+  }
+  assert.equal(Number((await query`SELECT count(*) FROM companies WHERE name='Brand New'`)[0].count),1);
+  assert.equal(Number((await query`SELECT count(*) FROM contacts WHERE first_name='Taylor Person'`)[0].count),2);
+  assert.equal(Number((await query`SELECT count(*) FROM contacts WHERE first_name='Morgan Finance'`)[0].count),2);
+  assert.equal(Number((await query`SELECT revenue_ytd_cents FROM companies WHERE name='SecondCo'`)[0].revenue_ytd_cents),12345);
+  assert.equal((await query`SELECT lifecycle_stage FROM companies WHERE name='SecondCo'`)[0].lifecycle_stage,'customer');
+  assert.equal(Number((await query`SELECT count(*) FROM prospects WHERE source_sheet='Sync fixtures' AND company_id IS NOT NULL`)[0].count),4);
+  const repeated=await action('syncQualifiedProspects',a.cookie,'sync','/prospects'); ok(repeated,'repeat bulk sync');
+  assert.ok(repeated.text.includes('"companiesCreated":0')); assert.ok(repeated.text.includes('"contactsCreated":0'));
+  ok(await action('syncQualifiedProspects',b.cookie,'sync','/prospects'),'other workspace bulk sync');
+  assert.equal(Number((await query`SELECT count(*) FROM companies WHERE workspace_id=${b.workspace}`)[0].count),1);
+  passed('bulk sync previews, normalizes websites, creates finance contacts, holds conflicts, preserves customers and serializes concurrent retries');
   console.log("ALL WORKSPACE CHECKS PASSED. No email was sent.");
   if (process.env.PROSPECT_PREVIEW === "1") {
     console.log("Disposable UI preview: " + origin + "/prospects — tenantalpha@example.test / " + a.password);

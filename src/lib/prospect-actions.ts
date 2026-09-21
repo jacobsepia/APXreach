@@ -9,6 +9,34 @@ import { db, prospects } from "@/db";
 import { requireTenantOrThrow } from "./workspace";
 import { readProspectWorkbook } from "./prospect-workbook";
 import { clean, prospectStatuses } from "./prospect-data";
+import { syncWorkspaceProspects } from "./prospect-sync-store";
+
+function refreshProspectCrm() {
+  for (const path of ["/prospects", "/companies", "/contacts", "/dashboard"])
+    revalidatePath(path);
+  revalidatePath("/companies/[id]", "page");
+  revalidatePath("/prospects/[id]", "page");
+}
+
+export async function syncQualifiedProspects(
+  mode: "preview" | "sync" = "preview",
+) {
+  const tenant = await requireTenantOrThrow();
+  z.enum(["preview", "sync"]).parse(mode);
+  try {
+    const summary = await syncWorkspaceProspects(tenant.workspaceId, {
+      preview: mode === "preview",
+    });
+    if (mode === "sync") refreshProspectCrm();
+    return { ok: true as const, summary };
+  } catch {
+    return {
+      ok: false as const,
+      error:
+        "CRM sync could not finish. Retry safely; existing company and contact details are preserved.",
+    };
+  }
+}
 
 export async function uploadProspects(form: FormData) {
   try {
@@ -37,11 +65,23 @@ export async function uploadProspects(form: FormData) {
           AS r(sheet text,row integer,raw jsonb,data jsonb,status text) RETURNING id
       ) SELECT count(*)::integer AS count FROM inserted`,
     ]);
-    revalidatePath("/prospects");
+    // Import is already committed. A sync failure must not masquerade as a
+    // failed import, and the bulk action can resume it without re-uploading.
+    let syncSummary;
+    let syncError: string | undefined;
+    try {
+      syncSummary = await syncWorkspaceProspects(tenant.workspaceId);
+    } catch {
+      syncError =
+        "Research was imported, but automatic CRM sync needs a retry. Use Sync qualified records to CRM.";
+    }
+    refreshProspectCrm();
     return {
       ok: true as const,
       count: Number(results[1][0].count),
       preview: undefined,
+      syncSummary,
+      syncError,
     };
   } catch (error) {
     console.error(
@@ -99,42 +139,18 @@ export async function updateProspect(form: FormData) {
   revalidatePath(`/prospects/${id}`);
 }
 
-/** Explicit promotion. Serialize within the workspace to prevent concurrent duplicate companies. */
+/** Individual and bulk sync share matching and exclusion rules. */
 export async function linkProspect(form: FormData) {
   const { workspaceId } = await requireTenantOrThrow();
   const id = z.string().uuid().parse(form.get("id"));
-  const sql = neon(process.env.DATABASE_URL!);
-  const result = await sql.transaction([
-    sql`SELECT id FROM workspaces WHERE id = ${workspaceId} FOR UPDATE`,
-    sql`WITH p AS (SELECT * FROM prospects WHERE id=${id} AND workspace_id=${workspaceId}
-      AND status NOT IN ('disqualified','duplicate') AND company_id IS NULL),
-    matches AS (SELECT c.id FROM companies c, p WHERE c.workspace_id=${workspaceId}
-      AND (lower(trim(c.name))=lower(trim(p.data->>'company')) OR
-        (p.data->>'domain' IS NOT NULL AND lower(regexp_replace(c.domain,'^www\\.','','i'))=p.data->>'domain'))),
-    created AS (INSERT INTO companies(workspace_id,name,domain,city,industry,source)
-      SELECT ${workspaceId},data->>'company',data->>'domain',data->>'location',data->>'industry',data->>'source'
-      FROM p WHERE NOT EXISTS(SELECT 1 FROM matches) RETURNING id),
-    chosen AS (SELECT id FROM matches WHERE (SELECT count(*) FROM matches)=1 UNION ALL SELECT id FROM created),
-    linked AS (UPDATE prospects SET company_id=chosen.id,updated_at=now() FROM chosen
-      WHERE prospects.id=${id} AND prospects.workspace_id=${workspaceId} RETURNING prospects.*),
-    person AS (INSERT INTO contacts(workspace_id,company_id,first_name,last_name,title)
-      SELECT ${workspaceId},company_id,data->>'contact','',data->>'contactTitle' FROM linked
-      WHERE data->>'contact' IS NOT NULL AND NOT EXISTS(SELECT 1 FROM contacts c
-        WHERE c.workspace_id=${workspaceId} AND c.company_id=linked.company_id
-        AND lower(trim(c.first_name || ' ' || c.last_name))=lower(trim(linked.data->>'contact'))) RETURNING id)
-    SELECT company_id FROM linked`,
-  ]);
-  revalidatePath("/prospects");
-  revalidatePath(`/prospects/${id}`);
-  revalidatePath("/companies");
-  revalidatePath("/contacts");
-  if (!result[1].length)
-    return {
-      ok: false,
-      error:
-        "This record is excluded, already linked, or matches multiple companies. Review it before linking.",
-    };
-  return { ok: true, error: null };
+  const result = await syncWorkspaceProspects(workspaceId, { onlyId: id });
+  refreshProspectCrm();
+  if (result.recordsLinked || result.contactsCreated || result.alreadyLinked)
+    return { ok: true, error: null };
+  return {
+    ok: false,
+    error: result.held[0]?.reason ?? "This record is excluded or unavailable.",
+  };
 }
 
 export async function createProspectTask(form: FormData) {
