@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { and, desc, eq, ne } from "drizzle-orm";
 import {
   activities,
+  prospects,
   companies,
   connections,
   contacts,
@@ -142,6 +143,7 @@ export default async function CompanyPage({
   const enrollInvoices = invoices.map((inv) => ({ number: inv.number, companyId: inv.companyId, dueDate: inv.dueDate, outstanding: money(inv.outstandingCents) }));
   const reminderStamp = new Intl.DateTimeFormat("en-CA", { month: "short", day: "numeric" });
 
+  const researchRecords = await db.select().from(prospects).where(and(eq(prospects.workspaceId, workspaceId), eq(prospects.companyId, id)));
   const synced = company.lifecycleStage === "customer";
   const bookLabel = connection?.providerLabel ?? "the books";
   const bookUrl = connection?.provider === "apxledger" ? "https://apxledger.ca" : null;
@@ -222,6 +224,7 @@ export default async function CompanyPage({
         </div>
       </div>
 
+      {researchRecords.length > 0 && <Card className="p-4"><h2 className="font-semibold mb-2">Prospect research</h2><div className="grid gap-3 md:grid-cols-2">{researchRecords.map(record => <Link key={record.id} href={`/prospects/${record.id}`} className="rounded-lg border border-border p-3 hover:bg-[var(--tint)]"><div className="text-sm font-medium">Fit {record.data.fit ?? '—'}/5 · {record.data.serviceLane ?? record.sourceSheet}</div><p className="mt-1 text-sm text-muted-foreground">{record.data.rationale ?? 'Review research and qualification'}</p><p className="mt-2 text-xs text-[var(--accent-primary)]">View research and next action →</p></Link>)}</div></Card>}
       {/* Three columns */}
       <div className="grid grid-cols-[280px_minmax(0,1fr)_320px] items-start gap-3.5 max-xl:grid-cols-1">
         {/* Left */}

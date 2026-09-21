@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  turbopack: { root: process.cwd() },
   experimental: {
     serverActions: {
       /* Email attachments travel through a server action. Vercel's own cap on

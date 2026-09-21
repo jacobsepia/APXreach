@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { neon } from "@neondatabase/serverless";
+import ExcelJS from "exceljs";
 import { safeAuthDestination } from "../src/lib/auth-redirect.ts";
 const require = createRequire(import.meta.url);
 const { encodeReply } = require("next/dist/compiled/react-server-dom-webpack/client.node");
@@ -23,7 +24,8 @@ const env = { ...process.env, DATABASE_URL: testUrl.toString(), BETTER_AUTH_URL:
 let server, created = false;
 let logs = "";
 const manifest = JSON.parse(readFileSync(".next/server/server-reference-manifest.json", "utf8")).node;
-const references = new Map(Object.entries(manifest).map(([id, entry]) => [Object.values(entry.workers)[0].exportedName, id]));
+// Next 16.3 places exportedName on the action rather than each worker.
+const references = new Map(Object.entries(manifest).map(([id, entry]) => [entry.exportedName ?? Object.values(entry.workers)[0].exportedName, id]));
 
 async function request(path, cookie = "", init = {}) {
   const response = await fetch(origin + path, { redirect: "manual", ...init,
@@ -31,12 +33,13 @@ async function request(path, cookie = "", init = {}) {
   return { status: response.status, text: await response.text(), headers: response.headers };
 }
 async function signup(name) {
+  const password = "Test-only-" + randomUUID();
   const result = await request("/api/auth/sign-up/email", "", { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name, email: name.toLowerCase() + "@example.test", password: "Test-only-" + randomUUID() }) });
+    body: JSON.stringify({ name, email: name.toLowerCase() + "@example.test", password }) });
   assert.equal(result.status, 200, "Public signup: " + result.text);
   const cookie = result.headers.getSetCookie().map((v) => v.split(";")[0]).join("; ");
   assert.ok(cookie.includes("session_token"));
-  return { id: JSON.parse(result.text).user.id, cookie };
+  return { id: JSON.parse(result.text).user.id, cookie, password };
 }
 async function action(name, cookie, values, path = "/contacts") {
   assert.ok(references.has(name), "Action exists: " + name);
@@ -208,7 +211,51 @@ try {
   assert.equal((await request("/api/webhooks/apxledger", "", { method: "POST", body: "null" })).status, 400);
   assert.equal((await request("/api/webhooks/apxledger", "", { method: "POST", body: JSON.stringify({ companyId: "unknown" }) })).status, 401);
   passed("cron and webhook authentication reaches the route and rejects unauthenticated requests");
+  const prospectMigration = readFileSync("migrations/20260921_prospects.sql", "utf8");
+  // This connection targets only the disposable database created above. Verify
+  // the production migration creates fresh tables, not only IF NOT EXISTS.
+  await query.query("DROP TABLE prospects, prospect_imports");
+  const prospectStatements = prospectMigration.split(";").map(s=>s.trim()).filter(Boolean);
+  await query.transaction(prospectStatements.map(s=>query.query(s)));
+  await query.transaction(prospectStatements.map(s=>query.query(s)));
+  const book = new ExcelJS.Workbook();
+  const prospectSheet = book.addWorksheet("Ranked Prospects");
+  prospectSheet.addRow(["Company", "Fit", "Verdict", "Contact", "Contact title", "Why APX fits", "Custom evidence"]);
+  prospectSheet.addRow(["PROSPECT_ALPHA", 5, "Hot", "Alex Founder", "CEO", "Growing team", "Retain this"]);
+  prospectSheet.addRow(["EXCLUDED_ALPHA", 1, "Skip", "", "", "Not a fit", ""]);
+  const blob = new Blob([await book.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  ok(await action("uploadProspects", a.cookie, { file: new File([blob], "prospects.xlsx"), mode: "preview" }, "/prospects"), "prospect preview");
+  assert.equal(Number((await query`SELECT count(*) FROM prospects`)[0].count), 0);
+  for(let i=0;i<2;i++) ok(await action("uploadProspects", a.cookie, { file: new File([blob], "prospects.xlsx"), mode: "import" }, "/prospects"), "prospect import");
+  assert.equal(Number((await query`SELECT count(*) FROM prospects WHERE workspace_id=${a.workspace}`)[0].count), 2);
+  assert.equal(Number((await query`SELECT count(*) FROM prospect_imports WHERE workspace_id=${a.workspace}`)[0].count), 1);
+  assert.equal(Number((await query`SELECT count(*) FROM companies`)[0].count), 2);
+  const [prospect] = await query`SELECT * FROM prospects WHERE data->>'company'='PROSPECT_ALPHA' AND workspace_id=${a.workspace}`;
+  assert.equal(prospect.raw["Custom evidence"], "Retain this");
+  assert.ok(!(await request("/prospects", b.cookie)).text.includes("PROSPECT_ALPHA"));
+  assert.equal((await request("/prospects/" + prospect.id, b.cookie)).status, 404);
+  await action("updateProspect", b.cookie, { id:prospect.id, status:"qualified", fit:"2" }, "/prospects");
+  assert.equal((await query`SELECT status FROM prospects WHERE id=${prospect.id}`)[0].status, "research");
+  await action("linkProspect", b.cookie, { id:prospect.id }, "/prospects");
+  assert.equal((await query`SELECT company_id FROM prospects WHERE id=${prospect.id}`)[0].company_id, null);
+  ok(await action("updateProspect", a.cookie, { id:prospect.id, status:"ready", fit:"4", rationale:"Reviewed fit", nextAction:"Research email", nextActionDate:"2026-10-01" }, "/prospects"), "review prospect");
+  assert.equal((await query`SELECT data->>'fit' AS fit FROM prospects WHERE id=${prospect.id}`)[0].fit, "4");
+  assert.equal((await query`SELECT raw->>'Fit' AS fit FROM prospects WHERE id=${prospect.id}`)[0].fit, "5");
+  for(let i=0;i<2;i++) await action("linkProspect", a.cookie, { id:prospect.id }, "/prospects");
+  assert.equal(Number((await query`SELECT count(*) FROM companies WHERE name='PROSPECT_ALPHA'`)[0].count), 1);
+  assert.equal(Number((await query`SELECT count(*) FROM contacts WHERE first_name='Alex Founder'`)[0].count), 1);
+  for(let i=0;i<2;i++) ok(await action("createProspectTask", a.cookie, { id:prospect.id }, "/prospects"), "prospect follow-up task");
+  assert.equal(Number((await query`SELECT count(*) FROM activities WHERE subject='Research email'`)[0].count), 1);
+  const [excluded] = await query`SELECT id FROM prospects WHERE data->>'company'='EXCLUDED_ALPHA'`;
+  await action("linkProspect", a.cookie, { id:excluded.id }, "/prospects");
+  assert.equal(Number((await query`SELECT count(*) FROM companies WHERE name='EXCLUDED_ALPHA'`)[0].count), 0);
+  passed("prospect preview, repeat import, raw preservation, review, promotion and workspace isolation");
   console.log("ALL WORKSPACE CHECKS PASSED. No email was sent.");
+  if (process.env.PROSPECT_PREVIEW === "1") {
+    console.log("Disposable UI preview: " + origin + "/prospects — tenantalpha@example.test / " + a.password);
+    console.log("Preview stays available for three minutes, then its database is removed.");
+    await new Promise(resolve=>setTimeout(resolve,180000));
+  }
 } catch (error) {
   console.error(logs.slice(-5000));
   throw error;

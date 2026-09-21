@@ -20,6 +20,7 @@ export type NavItem = {
 
 export const mainNav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
+  { href: "/prospects", label: "Prospects", icon: Target },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/companies", label: "Companies", icon: Building2 },
   { href: "/deals", label: "Deals", icon: Target },

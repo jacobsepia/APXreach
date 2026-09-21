@@ -9,8 +9,25 @@ import {
   uuid,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import type { ProspectData } from "../../lib/prospect-data";
 
 export * from "./auth";
+
+export const prospectImports = pgTable("prospect_imports", {
+  id: uuid("id").defaultRandom().primaryKey(), workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
+  fileName: text("file_name").notNull(), fileHash: text("file_hash").notNull(), rowCount: integer("row_count").notNull(),
+  createdBy: text("created_by").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [uniqueIndex("prospect_imports_workspace_hash_idx").on(t.workspaceId, t.fileHash)]);
+export const prospects = pgTable("prospects", {
+  id: uuid("id").defaultRandom().primaryKey(), workspaceId: uuid("workspace_id").references(() => workspaces.id).notNull(),
+  importId: uuid("import_id").references(() => prospectImports.id).notNull(), sourceSheet: text("source_sheet").notNull(),
+  sourceRow: integer("source_row").notNull(), raw: jsonb("raw").$type<Record<string, string>>().notNull(),
+  data: jsonb("data").$type<ProspectData>().notNull(), status: text("status").default("research").notNull(),
+  companyId: uuid("company_id").references(() => companies.id, { onDelete: "set null" }), ownerName: text("owner_name"),
+  taskId: uuid("task_id").references(() => activities.id, { onDelete: "set null" }),
+  nextAction: text("next_action"), nextActionDate: date("next_action_date"), reviewNotes: text("review_notes"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [uniqueIndex("prospects_import_row_idx").on(t.importId, t.sourceSheet, t.sourceRow)]);
 import { user } from "./auth";
 
 /*
